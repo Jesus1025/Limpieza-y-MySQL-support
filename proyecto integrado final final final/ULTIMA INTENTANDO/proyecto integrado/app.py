@@ -62,7 +62,7 @@ os.makedirs(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads'),
 
 
 def get_db_connection():
-    """Obtener conexión a base de datos (MySQL en producción, SQLite en desarrollo)."""
+    """Obtener conexión a base de datos (MySQL forzado en PythonAnywhere)."""
     if USE_MYSQL:
         try:
             import MySQLdb
@@ -70,11 +70,12 @@ def get_db_connection():
             conn.set_charset('utf8mb4')
             return conn
         except Exception as e:
-            # Fallback a SQLite si falla MySQL
-            print(f"⚠️ Error conectando a MySQL: {e}. Usando SQLite...")
-            return sqlite3.connect(app.config['DATABASE'])
+            print(f"❌ ERROR GRAVE: No se pudo conectar a MySQL: {e}")
+            raise e 
     else:
-        return sqlite3.connect(app.config['DATABASE'])
+        conn = sqlite3.connect(app.config['DATABASE'])
+        conn.row_factory = sqlite3.Row
+        return conn
 
 
 
@@ -94,490 +95,99 @@ def ensure_column(cursor, table, column_name, column_definition):
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_definition}")
 
 def init_database():
-    """Inicializar base de datos según diagrama ER completo"""
-    conn = sqlite3.connect(app.config['DATABASE'])
+    """Inicializar base de datos (Compatible con MySQL y SQLite)"""
+    conn = get_db_connection()
     cursor = conn.cursor()
     
-    # ============================================================
-    # TABLAS DE REFERENCIA GEOGRÁFICA
-    # ============================================================
+    es_mysql = USE_MYSQL
+    print(f"🔧 Inicializando base de datos en: {'MySQL' if es_mysql else 'SQLite'}")
     
-    # Tabla REGION
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS region (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            codigo TEXT UNIQUE
-        )
-    ''')
-    
-    # Tabla CIUDAD
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS ciudad (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            region_id INTEGER,
-            FOREIGN KEY (region_id) REFERENCES region(id)
-        )
-    ''')
-    
-    # Tabla COMUNA
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS comuna (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            ciudad_id INTEGER,
-            FOREIGN KEY (ciudad_id) REFERENCES ciudad(id)
-        )
-    ''')
-    
-    # Tabla DIRECCION
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS direccion (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            calle TEXT,
-            numero TEXT,
-            depto TEXT,
-            codigo_postal TEXT,
-            comuna_id INTEGER,
-            FOREIGN KEY (comuna_id) REFERENCES comuna(id)
-        )
-    ''')
-    
-    # ============================================================
-    # TABLAS DE TIPOS Y REFERENCIAS
-    # ============================================================
-    
-    # Tabla TIPO_DOCUMENTO
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tipo_documento (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE NOT NULL,
-            nombre TEXT NOT NULL,
-            descripcion TEXT,
-            afecto_iva BOOLEAN DEFAULT 1
-        )
-    ''')
-    
-    # Tabla FORMA_PAGO
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS forma_pago (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE NOT NULL,
-            nombre TEXT NOT NULL,
-            descripcion TEXT,
-            dias_plazo INTEGER DEFAULT 0
-        )
-    ''')
-    
-    # Tabla TIPO_PAGO
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tipo_pago (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE NOT NULL,
-            nombre TEXT NOT NULL,
-            descripcion TEXT
-        )
-    ''')
-    
-    # Tabla ESTADO_DOCUMENTO
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS estado_documento (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE NOT NULL,
-            nombre TEXT NOT NULL,
-            descripcion TEXT,
-            color TEXT DEFAULT '#6c757d'
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA EMPRESA_PERSONA (CLIENTES)
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS empresa_persona (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rut TEXT UNIQUE NOT NULL,
-            razon_social TEXT NOT NULL,
-            nombre_fantasia TEXT,
-            giro TEXT,
-            telefono TEXT,
-            email TEXT,
-            sitio_web TEXT,
-            direccion_id INTEGER,
-            es_empresa BOOLEAN DEFAULT 1,
-            fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-            activo BOOLEAN DEFAULT 1,
-            observaciones TEXT,
-            FOREIGN KEY (direccion_id) REFERENCES direccion(id)
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA USUARIOS (para login)
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            nombre TEXT,
-            email TEXT,
-            rol TEXT DEFAULT 'admin',
-            activo BOOLEAN DEFAULT 1,
-            fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA PROYECTOS
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS proyectos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE NOT NULL,
-            nombre TEXT NOT NULL,
-            descripcion TEXT,
-            cliente_rut TEXT,
-            empresa_persona_id INTEGER,
-            presupuesto REAL DEFAULT 0,
-            fecha_inicio DATE,
-            fecha_termino DATE,
-            estado TEXT DEFAULT 'Activo',
-            observaciones TEXT,
-            FOREIGN KEY (empresa_persona_id) REFERENCES empresa_persona(id)
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA PRODUCTOS_SERVICIOS
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS producto_servicio (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT UNIQUE,
-            nombre TEXT NOT NULL,
-            descripcion TEXT,
-            precio_unitario REAL DEFAULT 0,
-            unidad_medida TEXT DEFAULT 'UN',
-            es_servicio BOOLEAN DEFAULT 1,
-            activo BOOLEAN DEFAULT 1,
-            fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA DOCUMENTO (FACTURA, BOLETA, NC, ND)
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS documento (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            numero_doc INTEGER NOT NULL,
-            tipo_documento_id INTEGER,
-            fecha_emision DATE NOT NULL,
-            fecha_vencimiento DATE,
-            empresa_persona_id INTEGER,
-            proyecto_id INTEGER,
-            forma_pago_id INTEGER,
-            estado_id INTEGER,
-            subtotal REAL DEFAULT 0,
-            descuento_porcentaje REAL DEFAULT 0,
-            descuento_monto REAL DEFAULT 0,
-            valor_neto REAL DEFAULT 0,
-            iva REAL DEFAULT 0,
-            valor_total REAL DEFAULT 0,
-            observaciones TEXT,
-            documento_referencia_id INTEGER,
-            fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (tipo_documento_id) REFERENCES tipo_documento(id),
-            FOREIGN KEY (empresa_persona_id) REFERENCES empresa_persona(id),
-            FOREIGN KEY (proyecto_id) REFERENCES proyectos(id),
-            FOREIGN KEY (forma_pago_id) REFERENCES forma_pago(id),
-            FOREIGN KEY (estado_id) REFERENCES estado_documento(id),
-            FOREIGN KEY (documento_referencia_id) REFERENCES documento(id)
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA DETALLE_DOCUMENTO (Líneas de cada documento)
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS detalle_documento (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            documento_id INTEGER NOT NULL,
-            producto_servicio_id INTEGER,
-            descripcion TEXT,
-            cantidad REAL DEFAULT 1,
-            precio_unitario REAL DEFAULT 0,
-            descuento_porcentaje REAL DEFAULT 0,
-            descuento_monto REAL DEFAULT 0,
-            subtotal REAL DEFAULT 0,
-            orden INTEGER DEFAULT 0,
-            FOREIGN KEY (documento_id) REFERENCES documento(id) ON DELETE CASCADE,
-            FOREIGN KEY (producto_servicio_id) REFERENCES producto_servicio(id)
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA TRANSACCIONES (Pagos y movimientos)
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS transaccion (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            documento_id INTEGER,
-            tipo_pago_id INTEGER,
-            fecha_transaccion DATE NOT NULL,
-            monto REAL NOT NULL,
-            numero_referencia TEXT,
-            banco TEXT,
-            observaciones TEXT,
-            fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (documento_id) REFERENCES documento(id),
-            FOREIGN KEY (tipo_pago_id) REFERENCES tipo_pago(id)
-        )
-    ''')
-    
-    # ============================================================
-    # TABLA TRANSPORTE (para guías de despacho)
-    # ============================================================
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS transporte (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            documento_id INTEGER,
-            patente TEXT,
-            chofer_nombre TEXT,
-            chofer_rut TEXT,
-            direccion_destino_id INTEGER,
-            fecha_despacho DATE,
-            observaciones TEXT,
-            FOREIGN KEY (documento_id) REFERENCES documento(id),
-            FOREIGN KEY (direccion_destino_id) REFERENCES direccion(id)
-        )
-    ''')
-    
-    # ============================================================
-    # MIGRACIÓN: Mantener compatibilidad con tablas antiguas
-    # ============================================================
-    
-    # Verificar si existen las tablas antiguas y migrar datos
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='clientes'")
-    if cursor.fetchone():
-        # Migrar clientes a empresa_persona
+    # Solo crear tabla de clientes (compatible con ambas)
+    # MySQL no necesita AUTOINCREMENT en PRIMARY KEY INT AUTO_INCREMENT
+    if es_mysql:
         cursor.execute('''
-            INSERT OR IGNORE INTO empresa_persona (rut, razon_social, giro, telefono, email, activo)
-            SELECT rut, razon_social, giro, telefono, email, activo FROM clientes
+            CREATE TABLE IF NOT EXISTS clientes (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                rut VARCHAR(20) UNIQUE NOT NULL,
+                razon_social VARCHAR(200) NOT NULL,
+                giro VARCHAR(150),
+                telefono VARCHAR(20),
+                email VARCHAR(150),
+                direccion VARCHAR(300),
+                comuna VARCHAR(100),
+                cuenta_corriente VARCHAR(50),
+                banco VARCHAR(100),
+                observaciones TEXT,
+                activo TINYINT(1) DEFAULT 1,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_rut (rut),
+                INDEX idx_activo (activo)
+            ) CHARACTER SET utf8mb4
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clientes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rut TEXT UNIQUE,
+                razon_social TEXT,
+                giro TEXT,
+                telefono TEXT,
+                email TEXT,
+                direccion TEXT,
+                comuna TEXT,
+                cuenta_corriente TEXT,
+                banco TEXT,
+                observaciones TEXT,
+                fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
+                activo BOOLEAN DEFAULT 1
+            )
         ''')
     
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='documentos'")
-    if cursor.fetchone():
-        # Los documentos antiguos se mantienen en la tabla 'documentos' por compatibilidad
-        # Se pueden migrar manualmente después
-        pass
+    # Crear tabla de usuarios
+    if es_mysql:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                nombre VARCHAR(200),
+                email VARCHAR(150),
+                rol VARCHAR(50) DEFAULT 'admin',
+                activo TINYINT(1) DEFAULT 1,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                nombre TEXT,
+                email TEXT,
+                rol TEXT DEFAULT 'admin',
+                activo BOOLEAN DEFAULT 1,
+                fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
     
-    # ============================================================
-    # DATOS INICIALES - Regiones de Chile
-    # ============================================================
-    
-    regiones_chile = [
-        ('XV', 'Arica y Parinacota'),
-        ('I', 'Tarapacá'),
-        ('II', 'Antofagasta'),
-        ('III', 'Atacama'),
-        ('IV', 'Coquimbo'),
-        ('V', 'Valparaíso'),
-        ('RM', 'Metropolitana de Santiago'),
-        ('VI', "O'Higgins"),
-        ('VII', 'Maule'),
-        ('XVI', 'Ñuble'),
-        ('VIII', 'Biobío'),
-        ('IX', 'La Araucanía'),
-        ('XIV', 'Los Ríos'),
-        ('X', 'Los Lagos'),
-        ('XI', 'Aysén'),
-        ('XII', 'Magallanes')
-    ]
-    
-    for codigo, nombre in regiones_chile:
-        cursor.execute('INSERT OR IGNORE INTO region (codigo, nombre) VALUES (?, ?)', (codigo, nombre))
-    
-    # Ciudades principales (Región Metropolitana como ejemplo)
-    cursor.execute('SELECT id FROM region WHERE codigo = ?', ('RM',))
-    rm = cursor.fetchone()
-    if rm:
-        ciudades_rm = ['Santiago', 'Puente Alto', 'Maipú', 'Las Condes', 'La Florida', 'Providencia', 'Vitacura']
-        for ciudad in ciudades_rm:
-            cursor.execute('INSERT OR IGNORE INTO ciudad (nombre, region_id) VALUES (?, ?)', (ciudad, rm[0]))
-    
-    # Comunas de Santiago
-    cursor.execute('SELECT id FROM ciudad WHERE nombre = ?', ('Santiago',))
-    stgo = cursor.fetchone()
-    if stgo:
-        comunas_stgo = ['Santiago Centro', 'Providencia', 'Las Condes', 'Vitacura', 'Ñuñoa', 'La Reina', 
-                        'Macul', 'Peñalolén', 'La Florida', 'Puente Alto', 'San Miguel', 'San Joaquín',
-                        'Maipú', 'Cerrillos', 'Estación Central', 'Quinta Normal', 'Renca', 'Quilicura']
-        for comuna in comunas_stgo:
-            cursor.execute('INSERT OR IGNORE INTO comuna (nombre, ciudad_id) VALUES (?, ?)', (comuna, stgo[0]))
-    
-    # ============================================================
-    # DATOS INICIALES - Tipos de documento
-    # ============================================================
-    
-    tipos_doc = [
-        ('FAC', 'Factura Electrónica', 'Factura afecta a IVA', 1),
-        ('FEX', 'Factura Exenta', 'Factura exenta de IVA', 0),
-        ('BOL', 'Boleta Electrónica', 'Boleta de venta', 1),
-        ('NC', 'Nota de Crédito', 'Nota de crédito electrónica', 1),
-        ('ND', 'Nota de Débito', 'Nota de débito electrónica', 1),
-        ('GD', 'Guía de Despacho', 'Guía de despacho electrónica', 0)
-    ]
-    
-    for codigo, nombre, desc, iva in tipos_doc:
-        cursor.execute('INSERT OR IGNORE INTO tipo_documento (codigo, nombre, descripcion, afecto_iva) VALUES (?, ?, ?, ?)',
-                      (codigo, nombre, desc, iva))
-    
-    # ============================================================
-    # DATOS INICIALES - Formas de pago
-    # ============================================================
-    
-    formas_pago = [
-        ('CONT', 'Contado', 'Pago al contado', 0),
-        ('30D', 'Crédito 30 días', 'Pago a 30 días', 30),
-        ('60D', 'Crédito 60 días', 'Pago a 60 días', 60),
-        ('90D', 'Crédito 90 días', 'Pago a 90 días', 90)
-    ]
-    
-    for codigo, nombre, desc, dias in formas_pago:
-        cursor.execute('INSERT OR IGNORE INTO forma_pago (codigo, nombre, descripcion, dias_plazo) VALUES (?, ?, ?, ?)',
-                      (codigo, nombre, desc, dias))
-    
-    # ============================================================
-    # DATOS INICIALES - Tipos de pago
-    # ============================================================
-    
-    tipos_pago = [
-        ('EFE', 'Efectivo', 'Pago en efectivo'),
-        ('TRF', 'Transferencia', 'Transferencia bancaria'),
-        ('CHQ', 'Cheque', 'Pago con cheque'),
-        ('TDC', 'Tarjeta de Crédito', 'Pago con tarjeta de crédito'),
-        ('TDD', 'Tarjeta de Débito', 'Pago con tarjeta de débito'),
-        ('CRE', 'Crédito', 'Pago a crédito')
-    ]
-    
-    for codigo, nombre, desc in tipos_pago:
-        cursor.execute('INSERT OR IGNORE INTO tipo_pago (codigo, nombre, descripcion) VALUES (?, ?, ?)',
-                      (codigo, nombre, desc))
-    
-    # ============================================================
-    # DATOS INICIALES - Estados de documento
-    # ============================================================
-    
-    estados = [
-        ('PEN', 'Pendiente', 'Documento pendiente de pago', '#ffc107'),
-        ('PAG', 'Pagado', 'Documento pagado completamente', '#28a745'),
-        ('PAR', 'Pago Parcial', 'Documento con pago parcial', '#17a2b8'),
-        ('ANU', 'Anulado', 'Documento anulado', '#dc3545'),
-        ('VEN', 'Vencido', 'Documento vencido sin pagar', '#fd7e14')
-    ]
-    
-    for codigo, nombre, desc, color in estados:
-        cursor.execute('INSERT OR IGNORE INTO estado_documento (codigo, nombre, descripcion, color) VALUES (?, ?, ?, ?)',
-                      (codigo, nombre, desc, color))
-    
-    # ============================================================
-    # USUARIO POR DEFECTO
-    # ============================================================
-    
-    # Usar werkzeug para hash seguro de contraseñas
-    password_hash = generate_password_hash('admin123', method='pbkdf2:sha256')
-    cursor.execute('INSERT OR IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (?, ?, ?, ?)', 
-                  ('admin', password_hash, 'Administrador', 'admin'))
-    
-    # ============================================================
-    # DATOS DE EJEMPLO - Empresa/Persona
-    # ============================================================
-    
-    cursor.execute('''INSERT OR IGNORE INTO empresa_persona (rut, razon_social, giro, email, es_empresa, activo) 
-                     VALUES ('76660180-4', 'WINPY SPA', 'Tecnología', 'contacto.winpy@gmail.com', 1, 1)''')
-    cursor.execute('''INSERT OR IGNORE INTO empresa_persona (rut, razon_social, giro, email, es_empresa, activo) 
-                     VALUES ('78138410-0', 'APLICACIONES COMPUTACIONALES SPA', 'Software', 'contacto.aplicaciones@gmail.com', 1, 1)''')
-    
-    # ============================================================
-    # COMPATIBILIDAD - Mantener tablas antiguas
-    # ============================================================
-    
-    # Tabla clientes (compatibilidad hacia atrás)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rut TEXT UNIQUE,
-            razon_social TEXT,
-            giro TEXT,
-            telefono TEXT,
-            email TEXT,
-            direccion TEXT,
-            comuna TEXT,
-            fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-            activo BOOLEAN DEFAULT 1
+    # Insertar usuario admin
+    try:
+        pwd = generate_password_hash('admin123', method='pbkdf2:sha256')
+        cursor.execute(
+            'INSERT IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (%s, %s, %s, %s)' if es_mysql
+            else 'INSERT OR IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
+            ('admin', pwd, 'Administrador', 'admin')
         )
-    ''')
-    
-    # Tabla documentos antigua (compatibilidad hacia atrás)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS documentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            numero_doc INTEGER,
-            tipo_doc TEXT,
-            fecha_emision DATE,
-            cliente_rut TEXT,
-            descripcion TEXT,
-            valor_neto REAL,
-            iva REAL,
-            valor_total REAL,
-            estado TEXT DEFAULT 'Pendiente',
-            forma_pago TEXT,
-            proyecto_codigo TEXT
-        )
-    ''')
-    
-    # Asegurar columnas in tablas existentes
-    ensure_column(cursor, 'clientes', 'telefono', 'TEXT')
-    ensure_column(cursor, 'clientes', 'email', 'TEXT')
-    ensure_column(cursor, 'clientes', 'direccion', 'TEXT')
-    ensure_column(cursor, 'clientes', 'comuna', 'TEXT')
-    ensure_column(cursor, 'clientes', 'fecha_creacion', 'TEXT DEFAULT CURRENT_TIMESTAMP')
-    ensure_column(cursor, 'clientes', 'cuenta_corriente', 'TEXT')
-    ensure_column(cursor, 'clientes', 'idt', 'TEXT')
-    ensure_column(cursor, 'clientes', 'desc_idt', 'TEXT')
-    ensure_column(cursor, 'documentos', 'proyecto_codigo', 'TEXT')
-    ensure_column(cursor, 'proyectos', 'cliente_rut', 'TEXT')
-    ensure_column(cursor, 'proyectos', 'empresa_persona_id', 'INTEGER')
-    ensure_column(cursor, 'clientes', 'banco', 'TEXT')
-    ensure_column(cursor, 'clientes', 'observaciones', 'TEXT')
-    
-    # Sincronizar clientes con empresa_persona
-    cursor.execute('''
-        INSERT OR IGNORE INTO clientes (rut, razon_social, giro, telefono, email, activo)
-        SELECT rut, razon_social, giro, telefono, email, activo FROM empresa_persona
-    ''')
+    except Exception as e:
+        print(f"Nota sobre usuario admin: {e}")
     
     conn.commit()
     conn.close()
+    print("✅ Base de datos inicializada correctamente.")
 
 init_database()
 
-
-def get_db_connection():
-    conn = sqlite3.connect(app.config['DATABASE'])
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 def rows_to_dicts(rows):
@@ -735,9 +345,9 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        conn = sqlite3.connect(app.config['DATABASE'])
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT id, username, password_hash, nombre, rol FROM usuarios WHERE username = ?', (username,))
+        cursor.execute('SELECT id, username, password_hash, nombre, rol FROM usuarios WHERE username = %s' if USE_MYSQL else 'SELECT id, username, password_hash, nombre, rol FROM usuarios WHERE username = ?', (username,))
         user = cursor.fetchone()
         conn.close()
         
@@ -967,7 +577,7 @@ def cambiar_password():
 @login_required
 def api_generar_documento():
     data = request.get_json()
-    conn = sqlite3.connect(app.config['DATABASE'])
+    conn = get_db_connection()
     
     try:
         cursor = conn.cursor()
@@ -1040,7 +650,7 @@ def api_documentos_pendientes():
 @login_required
 def api_reporte_deudas():
     try:
-        conn = sqlite3.connect(app.config['DATABASE'])
+        conn = get_db_connection()
         deudas = conn.execute('''
             SELECT c.rut, c.razon_social, COUNT(d.id) as cantidad, COALESCE(SUM(d.valor_total), 0) as total
             FROM clientes c
@@ -1068,7 +678,7 @@ def api_reporte_deudas():
 @login_required
 def api_reporte_ventas_mensual():
     try:
-        conn = sqlite3.connect(app.config['DATABASE'])
+        conn = get_db_connection()
         ventas = conn.execute('''
             SELECT strftime('%Y-%m', fecha_emision) as mes, tipo_doc, 
                    COUNT(*) as cantidad, SUM(valor_total) as total
@@ -1096,7 +706,7 @@ def api_reporte_ventas_mensual():
 @login_required
 def api_reporte_top_clientes():
     try:
-        conn = sqlite3.connect(app.config['DATABASE'])
+        conn = get_db_connection()
         clientes = conn.execute('''
             SELECT c.razon_social, c.rut, COUNT(d.id) as documentos, SUM(d.valor_total) as total
             FROM clientes c
@@ -1125,7 +735,7 @@ def api_reporte_top_clientes():
 @login_required
 def api_reporte_anual():
     try:
-        conn = sqlite3.connect(app.config['DATABASE'])
+        conn = get_db_connection()
         
         # Ventas anuales
         ventas = conn.execute('''
@@ -2892,7 +2502,7 @@ def test_api():
 @app.route('/api/debug/clientes-db')
 def debug_clientes_db():
     """Endpoint de debug para verificar clientes en la BD"""
-    conn = sqlite3.connect(app.config['DATABASE'])
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         # Contar total de clientes
