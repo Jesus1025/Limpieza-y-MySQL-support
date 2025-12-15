@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes Completos - TekneTau{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="fas fa-chart-bar"></i> Reportes Completos</h1>
+    </div>
+</div>
+
+<!-- Tarjetas de Reportes -->
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-money-bill-wave fa-3x text-primary mb-3"></i>
+                <h5>Deudas por Cliente</h5>
+                <button class="btn btn-primary w-100" onclick="generarReporte('deudas')">
+                    <i class="fas fa-download"></i> Generar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                <h5>Ventas Mensuales</h5>
+                <button class="btn btn-info w-100" onclick="generarReporte('ventas')">
+                    <i class="fas fa-download"></i> Generar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-trophy fa-3x text-warning mb-3"></i>
+                <h5>Top Clientes</h5>
+                <button class="btn btn-warning w-100" onclick="generarReporte('top-clientes')">
+                    <i class="fas fa-download"></i> Generar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-calendar-alt fa-3x text-danger mb-3"></i>
+                <h5>Reporte Anual</h5>
+                <button class="btn btn-danger w-100" onclick="generarReporte('anual')">
+                    <i class="fas fa-download"></i> Generar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-sync-alt fa-3x text-success mb-3"></i>
+                <h5>Limpiar Resultados</h5>
+                <button class="btn btn-success w-100" onclick="limpiarResultados()">
+                    <i class="fas fa-broom"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resultados -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table"></i> Resultados del Reporte
+                    <span id="reporteStatus" class="badge bg-secondary float-end">Esperando...</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="resultadoReporte" class="text-center text-muted py-4">
+                    <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                    <h5>Selecciona un reporte para generar</h5>
+                    <p>Los resultados aparecerán aquí</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Función principal para generar reportes
+function generarReporte(tipo) {
+    const status = document.getElementById('reporteStatus');
+    const resultado = document.getElementById('resultadoReporte');
+    
+    status.className = 'badge bg-warning float-end';
+    status.textContent = 'Cargando...';
+    resultado.innerHTML = '<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Generando reporte...</p></div>';
+    
+    let url = '';
+    switch(tipo) {
+        case 'deudas':
+            url = '/api/reporte-deudas';
+            break;
+        case 'ventas':
+            url = '/api/reporte-ventas-mensual';
+            break;
+        case 'top-clientes':
+            url = '/api/reporte-top-clientes';
+            break;
+        case 'anual':
+            url = '/api/reporte-anual';
+            break;
+    }
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) throw new Error('Error: ' + response.status);
+            return response.json();
+        })
+        .then(data => {
+            status.className = 'badge bg-success float-end';
+            status.textContent = 'Completado';
+            
+            if (data.error) {
+                resultado.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+                return;
+            }
+            
+            mostrarResultado(tipo, data);
+        })
+        .catch(error => {
+            status.className = 'badge bg-danger float-end';
+            status.textContent = 'Error';
+            resultado.innerHTML = `<div class="alert alert-danger">Error al generar reporte: ${error.message}</div>`;
+        });
+}
+
+// Mostrar resultados según el tipo de reporte
+function mostrarResultado(tipo, data) {
+    const resultado = document.getElementById('resultadoReporte');
+    
+    if (!data || data.length === 0) {
+        resultado.innerHTML = '<div class="alert alert-info">No hay datos para mostrar</div>';
+        return;
+    }
+    
+    let html = '';
+    
+    switch(tipo) {
+        case 'deudas':
+            html = generarTablaDeudas(data);
+            break;
+        case 'ventas':
+            html = generarTablaVentas(data);
+            break;
+        case 'top-clientes':
+            html = generarTablaTopClientes(data);
+            break;
+        case 'anual':
+            html = generarReporteAnual(data);
+            break;
+    }
+    
+    resultado.innerHTML = html;
+}
+
+// Generar tabla de deudas
+function generarTablaDeudas(data) {
+    let total = 0;
+    let html = `
+        <h5 class="mb-3 text-primary"><i class="fas fa-money-bill-wave"></i> Reporte de Deudas</h5>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Cliente</th>
+                        <th>RUT</th>
+                        <th>Documentos</th>
+                        <th>Total Deuda</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    data.forEach(item => {
+        total += item.total_deuda;
+        html += `
+            <tr>
+                <td>${item.razon_social}</td>
+                <td>${item.rut}</td>
+                <td>${item.cantidad_documentos}</td>
+                <td class="text-danger fw-bold">$${item.total_deuda.toLocaleString()}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+                <tfoot class="table-primary">
+                    <tr>
+                        <td colspan="3" class="text-end"><strong>Total General:</strong></td>
+                        <td class="text-danger fw-bold">$${total.toLocaleString()}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Generar tabla de ventas mensuales
+function generarTablaVentas(data) {
+    let html = `
+        <h5 class="mb-3 text-info"><i class="fas fa-chart-line"></i> Ventas Mensuales</h5>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-info">
+                    <tr>
+                        <th>Mes</th>
+                        <th>Tipo</th>
+                        <th>Cantidad</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    data.forEach(item => {
+        const tipo = item.tipo_doc === 'FAC' ? '<span class="badge bg-primary">Factura</span>' : '<span class="badge bg-info">Boleta</span>';
+        html += `
+            <tr>
+                <td>${item.mes}</td>
+                <td>${tipo}</td>
+                <td>${item.cantidad}</td>
+                <td class="fw-bold">$${item.total_ventas.toLocaleString()}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Generar tabla de top clientes
+function generarTablaTopClientes(data) {
+    let html = `
+        <h5 class="mb-3 text-warning"><i class="fas fa-trophy"></i> Top Clientes</h5>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="table-warning">
+                    <tr>
+                        <th>#</th>
+                        <th>Cliente</th>
+                        <th>RUT</th>
+                        <th>Documentos</th>
+                        <th>Total Facturado</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    data.forEach((item, index) => {
+        const posicion = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+        html += `
+            <tr>
+                <td class="fw-bold">${posicion}</td>
+                <td>${item.razon_social}</td>
+                <td>${item.rut}</td>
+                <td>${item.total_documentos}</td>
+                <td class="text-warning fw-bold">$${item.total_facturado.toLocaleString()}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Generar reporte anual
+function generarReporteAnual(data) {
+    let html = `
+        <h5 class="mb-3 text-danger"><i class="fas fa-calendar-alt"></i> Reporte Anual</h5>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">Resumen por Año</h6>
+                    </div>
+                    <div class="card-body">
+    `;
+    
+    if (data.resumen_anual && data.resumen_anual.length > 0) {
+        html += `
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Año</th>
+                            <th>Documentos</th>
+                            <th>Total Ventas</th>
+                            <th>Total Pagado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        data.resumen_anual.forEach(item => {
+            html += `
+                <tr>
+                    <td class="fw-bold">${item.año}</td>
+                    <td>${item.total_documentos}</td>
+                    <td class="text-primary fw-bold">$${item.total_ventas.toLocaleString()}</td>
+                    <td class="text-success fw-bold">$${item.total_pagado.toLocaleString()}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table></div>`;
+    } else {
+        html += '<p class="text-muted">No hay datos de resumen anual</p>';
+    }
+    
+    html += `</div></div></div>`;
+    
+    // Ventas mensuales
+    if (data.ventas_anuales && data.ventas_anuales.length > 0) {
+        html += `
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">Ventas Mensuales</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Año</th>
+                                    <th>Mes</th>
+                                    <th>Documentos</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+        `;
+        
+        data.ventas_anuales.forEach(item => {
+            html += `
+                <tr>
+                    <td>${item.año}</td>
+                    <td class="fw-bold">${item.mes}</td>
+                    <td>${item.cantidad_documentos}</td>
+                    <td class="text-info fw-bold">$${item.total_ventas.toLocaleString()}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table></div></div></div>`;
+    }
+    
+    return html;
+}
+
+// Limpiar resultados
+function limpiarResultados() {
+    document.getElementById('reporteStatus').className = 'badge bg-secondary float-end';
+    document.getElementById('reporteStatus').textContent = 'Esperando...';
+    document.getElementById('resultadoReporte').innerHTML = `
+        <i class="fas fa-chart-bar fa-3x mb-3"></i>
+        <h5>Selecciona un reporte para generar</h5>
+        <p>Los resultados aparecerán aquí</p>
+    `;
+}
+</script>
+{% endblock %}
