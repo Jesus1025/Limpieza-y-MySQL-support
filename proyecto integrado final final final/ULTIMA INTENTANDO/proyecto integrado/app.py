@@ -1179,7 +1179,10 @@ def api_clientes():
             if not rut:
                 return jsonify({'success': False, 'error': 'RUT requerido'}), 400
             rut_norm = normalize_rut(rut)
-            cursor.execute('UPDATE clientes SET activo = 0 WHERE rut = ?', (rut_norm,))
+            if USE_MYSQL:
+                cursor.execute('UPDATE clientes SET activo = 0 WHERE rut = %s', (rut_norm,))
+            else:
+                cursor.execute('UPDATE clientes SET activo = 0 WHERE rut = ?', (rut_norm,))
             conn.commit()
             return jsonify({'success': cursor.rowcount > 0})
 
@@ -1259,7 +1262,7 @@ def api_clientes():
                         '''
                         INSERT INTO clientes (rut, razon_social, giro, telefono, email, 
                                             direccion, comuna, cuenta_corriente, banco, observaciones, activo)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
                         ''',
                         (rut_norm, razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones)
                     )
@@ -1268,7 +1271,7 @@ def api_clientes():
                         '''
                         INSERT INTO clientes (rut, razon_social, giro, telefono, email, 
                                             direccion, comuna, cuenta_corriente, banco, observaciones, activo)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                         ''',
                         (rut_norm, razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones)
                     )
@@ -1318,7 +1321,10 @@ def api_clientes_dev():
             if not rut:
                 return jsonify({'success': False, 'error': 'RUT requerido'}), 400
             rut_norm = normalize_rut(rut)
-            cursor.execute('UPDATE clientes SET activo = 0 WHERE rut = ?', (rut_norm,))
+            if USE_MYSQL:
+                cursor.execute('UPDATE clientes SET activo = 0 WHERE rut = %s', (rut_norm,))
+            else:
+                cursor.execute('UPDATE clientes SET activo = 0 WHERE rut = ?', (rut_norm,))
             conn.commit()
             return jsonify({'success': cursor.rowcount > 0})
 
@@ -1356,34 +1362,62 @@ def api_clientes_dev():
         activo = data.get('activo', 1)  # Por defecto activo = 1 si no se especifica
 
         # Buscar cliente existente
-        existente = cursor.execute(
-            "SELECT id FROM clientes WHERE rut = ?",
-            (rut_norm,)
-        ).fetchone()
+        if USE_MYSQL:
+            cursor.execute(
+                "SELECT id FROM clientes WHERE rut = %s",
+                (rut_norm,)
+            )
+            existente = cursor.fetchone()
+        else:
+            existente = cursor.execute(
+                "SELECT id FROM clientes WHERE rut = ?",
+                (rut_norm,)
+            ).fetchone()
 
         try:
             if existente:
                 # Actualizar cliente existente
-                cursor.execute(
-                    '''
-                    UPDATE clientes
-                    SET razon_social = ?, giro = ?, telefono = ?, email = ?, 
-                        direccion = ?, comuna = ?, cuenta_corriente = ?, banco = ?, observaciones = ?, activo = ?
-                    WHERE rut = ?
-                    ''',
-                    (razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones, activo, rut_norm)
-                )
+                if USE_MYSQL:
+                    cursor.execute(
+                        '''
+                        UPDATE clientes
+                        SET razon_social = %s, giro = %s, telefono = %s, email = %s, 
+                            direccion = %s, comuna = %s, cuenta_corriente = %s, banco = %s, observaciones = %s, activo = %s
+                        WHERE rut = %s
+                        ''',
+                        (razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones, activo, rut_norm)
+                    )
+                else:
+                    cursor.execute(
+                        '''
+                        UPDATE clientes
+                        SET razon_social = ?, giro = ?, telefono = ?, email = ?, 
+                            direccion = ?, comuna = ?, cuenta_corriente = ?, banco = ?, observaciones = ?, activo = ?
+                        WHERE rut = ?
+                        ''',
+                        (razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones, activo, rut_norm)
+                    )
                 mensaje = 'Cliente actualizado correctamente'
             else:
                 # Insertar nuevo cliente
-                cursor.execute(
-                    '''
-                    INSERT INTO clientes (rut, razon_social, giro, telefono, email, 
-                                        direccion, comuna, cuenta_corriente, banco, observaciones, activo)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                    ''',
-                    (rut_norm, razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones)
-                )
+                if USE_MYSQL:
+                    cursor.execute(
+                        '''
+                        INSERT INTO clientes (rut, razon_social, giro, telefono, email, 
+                                            direccion, comuna, cuenta_corriente, banco, observaciones, activo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+                        ''',
+                        (rut_norm, razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones)
+                    )
+                else:
+                    cursor.execute(
+                        '''
+                        INSERT INTO clientes (rut, razon_social, giro, telefono, email, 
+                                            direccion, comuna, cuenta_corriente, banco, observaciones, activo)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                        ''',
+                        (rut_norm, razon_social, giro, telefono_fmt, email_norm, direccion, comuna, cuenta_corriente, banco, observaciones)
+                    )
                 mensaje = 'Cliente creado correctamente'
 
             conn.commit()
