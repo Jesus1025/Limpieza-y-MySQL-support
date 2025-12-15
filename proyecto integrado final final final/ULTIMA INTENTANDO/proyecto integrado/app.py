@@ -75,22 +75,6 @@ def get_db_connection():
         return conn
 
 
-
-
-def normalize_rut(rut_str):
-    """Normalizar RUT: quitar puntos y guiones."""
-    if not rut_str:
-        return ''
-    return re.sub(r'[.-]', '', rut_str).strip()
-
-
-def ensure_column(cursor, table, column_name, column_definition):
-    """Agregar columna si no existe (migración simple)."""
-    cursor.execute(f"PRAGMA table_info({table})")
-    existing = {row[1] for row in cursor.fetchall()}
-    if column_name not in existing:
-        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_definition}")
-
 def init_database():
     """Inicializar base de datos (Compatible con MySQL y SQLite)"""
     conn = get_db_connection()
@@ -2478,105 +2462,6 @@ def api_estructura_bd():
     finally:
         conn.close()
 
-
-# ============================================================
-# ENDPOINT DE DEBUG
-# ============================================================
-
-@app.route('/test-simple')
-def test_simple():
-    """Página de prueba simple del API"""
-    return render_template('test_simple.html')
-
-@app.route('/clientes-dev')
-def clientes_dev():
-    """Versión de desarrollo sin autenticación"""
-    return render_template('clientes_dev.html')
-
-
-@app.route('/clientes-public')
-def clientes_public():
-    """Página pública para debug: muestra la plantilla de clientes sin requerir login.
-    Útil para verificar que el HTML se renderiza con filas de clientes (activos) en el servidor.
-    """
-    bancos_chile = [
-        'Banco de Chile', 'BCI', 'Scotiabank', 'BBVA', 'Santander', 'Itaú', 'Banco Ripley', 'Banco Falabella'
-    ]
-    conn = get_db_connection()
-    clientes_list = rows_to_dicts(conn.execute("SELECT * FROM clientes WHERE activo = 1 ORDER BY razon_social").fetchall())
-    conn.close()
-    return render_template('clientes.html', clientes=clientes_list, bancos=sorted(bancos_chile))
-
-@app.route('/test-api')
-@login_required
-def test_api():
-    """Página de prueba del API de clientes"""
-    return render_template('test_api.html')
-
-@app.route('/api/debug/clientes-db')
-def debug_clientes_db():
-    """Endpoint de debug para verificar clientes en la BD"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        # Contar total de clientes
-        total = cursor.execute("SELECT COUNT(*) FROM clientes").fetchone()[0]
-        
-        # Obtener todos los clientes sin filtro
-        rows = cursor.execute(
-            "SELECT id, rut, razon_social, email, activo FROM clientes"
-        ).fetchall()
-        
-        clientes = [dict(row) for row in rows]
-        
-        return jsonify({
-            'total': total,
-            'clientes': clientes,
-            'primera_fila': clientes[0] if clientes else None
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)})
-    finally:
-        conn.close()
-
-
-@app.route('/api/debug/status')
-def debug_status():
-    """Debug endpoint para verificar estado de la BD"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Verificar conexión
-        db_type = 'MySQL' if USE_MYSQL else 'SQLite'
-        
-        # Listar tablas
-        if USE_MYSQL:
-            cursor.execute("SHOW TABLES")
-            tables = [row[0] for row in cursor.fetchall()]
-        else:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in cursor.fetchall()]
-        
-        conn.close()
-        
-        return jsonify({
-            'status': 'OK',
-            'database': db_type,
-            'use_mysql': USE_MYSQL,
-            'has_mysql_credentials': HAS_MYSQL_CREDENTIALS,
-            'mysql_host': MYSQL_CONFIG.get('host', 'N/A') if USE_MYSQL else 'N/A',
-            'tables': tables,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'ERROR',
-            'error': str(e),
-            'database': 'MySQL' if USE_MYSQL else 'SQLite',
-            'use_mysql': USE_MYSQL,
-            'has_mysql_credentials': HAS_MYSQL_CREDENTIALS
-        }), 500
 
 
 if __name__ == '__main__':
