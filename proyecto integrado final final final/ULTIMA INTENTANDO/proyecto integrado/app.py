@@ -11,13 +11,10 @@ from datetime import datetime, timedelta
 # Importar werkzeug para hash seguro de contraseñas
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# MySQL support para producción
-try:
-    import pymysql
-    pymysql.install_as_MySQLdb()
-    MYSQL_AVAILABLE = True
-except ImportError:
-    MYSQL_AVAILABLE = False
+# MySQL support para producción - VITAL para PythonAnywhere
+import pymysql
+pymysql.install_as_MySQLdb()
+MYSQL_AVAILABLE = True
 
 # Constantes de configuración
 IVA_CHILE = 0.19
@@ -174,11 +171,16 @@ def init_database():
     # Insertar usuario admin
     try:
         pwd = generate_password_hash('admin123', method='pbkdf2:sha256')
-        cursor.execute(
-            'INSERT IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (%s, %s, %s, %s)' if es_mysql
-            else 'INSERT OR IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
-            ('admin', pwd, 'Administrador', 'admin')
-        )
+        if es_mysql:
+            cursor.execute(
+                'INSERT IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (%s, %s, %s, %s)',
+                ('admin', pwd, 'Administrador', 'admin')
+            )
+        else:
+            cursor.execute(
+                'INSERT OR IGNORE INTO usuarios (username, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
+                ('admin', pwd, 'Administrador', 'admin')
+            )
     except Exception as e:
         print(f"Nota sobre usuario admin: {e}")
     
@@ -186,7 +188,19 @@ def init_database():
     conn.close()
     print("✅ Base de datos inicializada correctamente.")
 
-init_database()
+# ============================================================
+# INICIALIZACIÓN SEGURA (solo en desarrollo local)
+# ============================================================
+
+# ⚠️ IMPORTANTE: NO ejecutar init_database() en PythonAnywhere
+# Las tablas ya existen en MySQL
+if __name__ == '__main__':
+    try:
+        print("🔧 Ejecutando en desarrollo local...")
+        init_database()
+    except Exception as e:
+        print(f"⚠️ Nota: No se pudo inicializar BD: {e}")
+# else: En PythonAnywhere NO hacemos init_database()
 
 
 
@@ -2524,6 +2538,45 @@ def debug_clientes_db():
         return jsonify({'error': str(e)})
     finally:
         conn.close()
+
+
+@app.route('/api/debug/status')
+def debug_status():
+    """Debug endpoint para verificar estado de la BD"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verificar conexión
+        db_type = 'MySQL' if USE_MYSQL else 'SQLite'
+        
+        # Listar tablas
+        if USE_MYSQL:
+            cursor.execute("SHOW TABLES")
+            tables = [row[0] for row in cursor.fetchall()]
+        else:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return jsonify({
+            'status': 'OK',
+            'database': db_type,
+            'use_mysql': USE_MYSQL,
+            'has_mysql_credentials': HAS_MYSQL_CREDENTIALS,
+            'mysql_host': MYSQL_CONFIG.get('host', 'N/A') if USE_MYSQL else 'N/A',
+            'tables': tables,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'ERROR',
+            'error': str(e),
+            'database': 'MySQL' if USE_MYSQL else 'SQLite',
+            'use_mysql': USE_MYSQL,
+            'has_mysql_credentials': HAS_MYSQL_CREDENTIALS
+        }), 500
 
 
 if __name__ == '__main__':
