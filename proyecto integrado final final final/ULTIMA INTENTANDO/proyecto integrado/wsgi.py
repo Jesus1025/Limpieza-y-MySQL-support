@@ -12,29 +12,22 @@ if project_home not in sys.path:
 # ============================================================
 # CONFIGURACIÓN DE VARIABLES DE ENTORNO PARA PYTHONANYWHERE
 # ============================================================
-# IMPORTANTE: Estas variables también deben estar configuradas en:
-# PythonAnywhere → Web → Environment variables
-# 
-# Pero las configuramos aquí como fallback:
 
 if not os.environ.get('ENVIRONMENT'):
     os.environ['ENVIRONMENT'] = 'production'
 
 if not os.environ.get('MYSQL_HOST'):
-    # Reemplaza 'tu_usuario' con tu usuario de PythonAnywhere
-    os.environ['MYSQL_HOST'] = 'tu_usuario.mysql.pythonanywhere-services.com'
+    os.environ['MYSQL_HOST'] = 'Teknetautest.mysql.pythonanywhere-services.com'
 
 if not os.environ.get('MYSQL_USER'):
-    # Reemplaza 'tu_usuario' con tu usuario de PythonAnywhere
-    os.environ['MYSQL_USER'] = 'tu_usuario'
+    os.environ['MYSQL_USER'] = 'Teknetautest'
 
 if not os.environ.get('MYSQL_PASSWORD'):
-    # Reemplaza con tu contraseña de MySQL de PythonAnywhere
-    os.environ['MYSQL_PASSWORD'] = 'tu_contraseña_mysql'
+    # IMPORTANTE: Reemplaza esto con tu contraseña MySQL
+    os.environ['MYSQL_PASSWORD'] = '19101810Aa'
 
 if not os.environ.get('MYSQL_DATABASE'):
-    # Reemplaza 'tu_usuario$nombre_bd' con tu base de datos en PythonAnywhere
-    os.environ['MYSQL_DATABASE'] = 'tu_usuario$teknetau_db'
+    os.environ['MYSQL_DATABASE'] = 'Teknetautest$default'
 
 if not os.environ.get('SECRET_KEY'):
     os.environ['SECRET_KEY'] = 'tu_clave_secreta_aqui_2025'
