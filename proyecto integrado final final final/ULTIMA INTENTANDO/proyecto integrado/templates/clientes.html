@@ -193,14 +193,10 @@
 
 {% block scripts %}
 <script>
-// Forzar que guardarCliente esté disponible globalmente
+// Funciones globales para clientes
 window.guardarCliente = function() {
   const rut = document.getElementById('clienteRut').value.trim();
   const razonSocial = document.getElementById('clienteRazonSocial').value.trim();
-  
-  console.log('=== GUARDANDO CLIENTE ===');
-  console.log('RUT:', rut);
-  console.log('Razón Social:', razonSocial);
   
   if (!rut || !razonSocial) {
     alert('RUT y Razón Social son requeridos');
@@ -220,8 +216,6 @@ window.guardarCliente = function() {
     activo: 1
   };
   
-  console.log('Enviando:', datos);
-  
   fetch('/api/clientes-dev', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -229,7 +223,6 @@ window.guardarCliente = function() {
   })
   .then(r => r.json())
   .then(data => {
-    console.log('Respuesta:', data);
     if (data.success) {
       alert('Cliente guardado!');
       location.reload();
@@ -237,10 +230,77 @@ window.guardarCliente = function() {
       alert('Error: ' + (data.error || 'Error desconocido'));
     }
   })
-  .catch(e => {
-    console.error('Error:', e);
-    alert('Error de conexión: ' + e.message);
-  });
+  .catch(e => alert('Error: ' + e.message));
+};
+
+window.eliminarCliente = function(rut) {
+  if (!confirm('¿Eliminar este cliente?')) return;
+  
+  const rutNorm = rut.replace(/[\.\s]/g, '').toUpperCase();
+  
+  fetch('/api/clientes-dev?rut=' + encodeURIComponent(rutNorm), {
+    method: 'DELETE'
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert('Cliente eliminado');
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Error al eliminar'));
+    }
+  })
+  .catch(e => alert('Error: ' + e.message));
+};
+
+window.editarCliente = function(rut) {
+  const rutNorm = rut.replace(/[\.\s]/g, '').toUpperCase();
+  
+  fetch('/api/clientes-dev/' + encodeURIComponent(rutNorm))
+  .then(r => r.json())
+  .then(c => {
+    document.getElementById('clienteRut').value = c.rut || '';
+    document.getElementById('clienteRut').readOnly = true;
+    document.getElementById('clienteRazonSocial').value = c.razon_social || '';
+    document.getElementById('clienteGiro').value = c.giro || '';
+    document.getElementById('clienteTelefono').value = c.telefono || '';
+    document.getElementById('clienteEmail').value = c.email || '';
+    document.getElementById('clienteDireccion').value = c.direccion || '';
+    document.getElementById('clienteBanco').value = c.banco || '';
+    document.getElementById('clienteCuentaCorriente').value = c.cuenta_corriente || '';
+    document.getElementById('clienteObservaciones').value = c.observaciones || '';
+    document.getElementById('modalTitulo').textContent = 'Editar Cliente';
+    
+    new bootstrap.Modal(document.getElementById('modalClienteNuevo')).show();
+  })
+  .catch(e => alert('Error al cargar cliente: ' + e.message));
+};
+
+window.verCliente = function(rut) {
+  const rutNorm = rut.replace(/[\.\s]/g, '').toUpperCase();
+  
+  fetch('/api/clientes-dev/' + encodeURIComponent(rutNorm))
+  .then(r => r.json())
+  .then(c => {
+    document.getElementById('verRut').textContent = c.rut || '-';
+    document.getElementById('verRazonSocial').textContent = c.razon_social || '-';
+    document.getElementById('verGiro').textContent = c.giro || '-';
+    document.getElementById('verEmail').textContent = c.email || '-';
+    document.getElementById('verTelefono').textContent = c.telefono || '-';
+    document.getElementById('verDireccion').textContent = c.direccion || '-';
+    document.getElementById('verBanco').textContent = c.banco || '-';
+    document.getElementById('verCuentaCorriente').textContent = c.cuenta_corriente || '-';
+    document.getElementById('verObservaciones').textContent = c.observaciones || '-';
+    
+    new bootstrap.Modal(document.getElementById('modalVerCliente')).show();
+  })
+  .catch(e => alert('Error: ' + e.message));
+};
+
+window.limpiarFiltros = function() {
+  document.getElementById('buscarCliente').value = '';
+  document.getElementById('filtroEstado').value = 'activo';
+  location.reload();
 };
 </script>
 <script src="{{ url_for('static', filename='js/clientes.js') }}?v={{ range(1000, 9999) | random }}"></script>
