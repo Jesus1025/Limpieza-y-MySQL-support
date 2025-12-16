@@ -193,13 +193,61 @@
 
 {% block scripts %}
 <script>
+// Validar RUT chileno (dígito verificador)
+function validarRUT(rut) {
+  if (!rut) return false;
+  const clean = rut.replace(/[\.\-\s]/g, '').toUpperCase();
+  if (clean.length < 2) return false;
+  
+  const cuerpo = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  
+  if (!/^\d+$/.test(cuerpo)) return false;
+  
+  let suma = 0;
+  let mult = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) {
+    suma += parseInt(cuerpo[i]) * mult;
+    mult = mult < 7 ? mult + 1 : 2;
+  }
+  
+  const resto = suma % 11;
+  const dvCalc = 11 - resto;
+  let esperado;
+  if (dvCalc === 11) esperado = '0';
+  else if (dvCalc === 10) esperado = 'K';
+  else esperado = dvCalc.toString();
+  
+  return esperado === dv;
+}
+
+// Validar email
+function validarEmail(email) {
+  if (!email) return true; // opcional
+  const pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return pattern.test(email);
+}
+
 // Funciones globales para clientes
 window.guardarCliente = function() {
   const rut = document.getElementById('clienteRut').value.trim();
   const razonSocial = document.getElementById('clienteRazonSocial').value.trim();
+  const email = (document.getElementById('clienteEmail') || {}).value || '';
   
   if (!rut || !razonSocial) {
     alert('RUT y Razón Social son requeridos');
+    return;
+  }
+  
+  // Validar RUT
+  if (!validarRUT(rut)) {
+    alert('RUT inválido. Verifique el dígito verificador.');
+    return;
+  }
+  
+  // Validar email si se proporciona
+  if (email && !validarEmail(email)) {
+    alert('Formato de email inválido');
     return;
   }
   
@@ -208,7 +256,7 @@ window.guardarCliente = function() {
     razon_social: razonSocial,
     giro: (document.getElementById('clienteGiro') || {}).value || '',
     telefono: (document.getElementById('clienteTelefono') || {}).value || '',
-    email: (document.getElementById('clienteEmail') || {}).value || '',
+    email: email,
     direccion: (document.getElementById('clienteDireccion') || {}).value || '',
     observaciones: (document.getElementById('clienteObservaciones') || {}).value || '',
     banco: (document.getElementById('clienteBanco') || {}).value || '',

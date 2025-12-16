@@ -39,6 +39,8 @@ def get_db():
 # VALIDACIONES SIMPLES
 # ============================================================
 
+import re
+
 def normalize_rut(rut):
     if not rut:
         return ''
@@ -76,6 +78,14 @@ def validate_rut(rut):
         esperado = str(dv_calc)
     
     return esperado == dv
+
+
+def validate_email(email):
+    """Validar formato de email"""
+    if not email:
+        return True  # Email es opcional
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email.strip()))
 
 
 # ============================================================
@@ -684,24 +694,35 @@ def api_clientes():
             conn.commit()
             return jsonify({'success': True})
         
-        # POST
+        # POST - Crear nuevo cliente
         data = request.get_json() or {}
         rut = (data.get('rut') or '').strip()
         razon = (data.get('razon_social') or '').strip()
+        email = (data.get('email') or '').strip()
         
+        # Validaciones obligatorias
         if not rut or not razon:
             return jsonify({'success': False, 'error': 'RUT y Razón Social son obligatorios'}), 400
         
+        # Validar formato RUT y dígito verificador
         if not validate_rut(rut):
-            return jsonify({'success': False, 'error': 'RUT inválido'}), 400
+            return jsonify({'success': False, 'error': 'RUT inválido. Verifique el dígito verificador.'}), 400
+        
+        # Validar formato email si se proporciona
+        if email and not validate_email(email):
+            return jsonify({'success': False, 'error': 'Formato de email inválido'}), 400
         
         rut_n = normalize_rut(rut)
         
-        # Verificar si existe
-        cur.execute("SELECT id FROM clientes WHERE rut=%s", (rut_n,))
+        # Verificar si el RUT ya existe
+        cur.execute("SELECT id, activo FROM clientes WHERE rut=%s", (rut_n,))
         existe = cur.fetchone()
         
         if existe:
+            # Si existe y está activo, rechazar
+            if existe['activo'] == 1:
+                return jsonify({'success': False, 'error': f'El RUT {rut_n} ya está registrado'}), 400
+            # Si existe pero está inactivo, reactivar y actualizar
             cur.execute('''
                 UPDATE clientes SET 
                     razon_social=%s, giro=%s, telefono=%s, email=%s, 
@@ -712,7 +733,7 @@ def api_clientes():
                 razon,
                 data.get('giro', ''),
                 data.get('telefono', ''),
-                data.get('email', ''),
+                email,
                 data.get('direccion', ''),
                 data.get('comuna', ''),
                 data.get('cuenta_corriente', ''),
@@ -720,8 +741,9 @@ def api_clientes():
                 data.get('observaciones', ''),
                 rut_n
             ))
-            msg = 'Cliente actualizado'
+            msg = 'Cliente reactivado'
         else:
+            # Crear nuevo cliente
             cur.execute('''
                 INSERT INTO clientes (rut, razon_social, giro, telefono, email, direccion, comuna, cuenta_corriente, banco, observaciones, activo)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
@@ -730,7 +752,7 @@ def api_clientes():
                 razon,
                 data.get('giro', ''),
                 data.get('telefono', ''),
-                data.get('email', ''),
+                email,
                 data.get('direccion', ''),
                 data.get('comuna', ''),
                 data.get('cuenta_corriente', ''),
