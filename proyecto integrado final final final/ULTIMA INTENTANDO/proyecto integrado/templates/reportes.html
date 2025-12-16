@@ -199,6 +199,7 @@
                             <option value="Pendiente">Pendiente</option>
                             <option value="Pagado">Pagado</option>
                             <option value="Anulado">Anulado</option>
+                            <option value="Devuelto">Devuelto</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -741,7 +742,7 @@ function buscarDocumentos() {
                     
                     const tipoLabel = {'FAC': 'Factura', 'BOL': 'Boleta', 'NC': 'N. Crédito', 'ND': 'N. Débito'}[doc.tipo_doc] || doc.tipo_doc;
                     const tipoBadge = {'FAC': 'primary', 'BOL': 'success', 'NC': 'info', 'ND': 'warning'}[doc.tipo_doc] || 'secondary';
-                    const estadoBadge = {'Pagado': 'success', 'Pendiente': 'warning', 'Anulado': 'danger', 'Aplicada': 'info'}[doc.estado] || 'secondary';
+                    const estadoBadge = {'Pagado': 'success', 'Pendiente': 'warning', 'Anulado': 'danger', 'Aplicada': 'info', 'Devuelto': 'info'}[doc.estado] || 'secondary';
                     
                     html += `
                         <tr>
@@ -807,7 +808,9 @@ function cargarDetalleProyecto() {
                 let html = '';
                 data.documentos.forEach(doc => {
                     const tipoLabel = {'FAC': 'Factura', 'BOL': 'Boleta', 'NC': 'N. Crédito', 'ND': 'N. Débito'}[doc.tipo_doc] || doc.tipo_doc;
-                    const estadoBadge = {'Pagado': 'success', 'Pendiente': 'warning', 'Anulado': 'danger'}[doc.estado] || 'secondary';
+                    const estadoBadge = {'Pagado': 'success', 'Pendiente': 'warning', 'Anulado': 'danger', 'Devuelto': 'info'}[doc.estado] || 'secondary';
+                    const btnDevolucion = (doc.estado === 'Pagado' && (doc.tipo_doc === 'FAC' || doc.tipo_doc === 'BOL')) ?
+                        `<button class="btn btn-outline-info" onclick="procesarDevolucion(${doc.id}, '${doc.numero_doc}', '${doc.tipo_doc}')" title="Devolución"><i class="fas fa-undo"></i></button>` : '';
                     html += `
                         <tr>
                             <td><span class="badge bg-secondary">${tipoLabel}</span></td>
@@ -820,6 +823,7 @@ function cargarDetalleProyecto() {
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-success" onclick="cambiarEstadoDoc(${doc.id}, 'Pagado')"><i class="fas fa-check"></i></button>
                                     <button class="btn btn-outline-warning" onclick="cambiarEstadoDoc(${doc.id}, 'Pendiente')"><i class="fas fa-clock"></i></button>
+                                    ${btnDevolucion}
                                 </div>
                             </td>
                         </tr>
@@ -849,6 +853,33 @@ function cambiarEstadoDoc(docId, estado) {
             cargarResumen();
         }
     });
+}
+
+// Procesar devolución de documento (Factura o Boleta)
+function procesarDevolucion(docId, numeroDoc, tipoDoc) {
+    const tipoNombre = tipoDoc === 'FAC' ? 'Factura' : 'Boleta';
+    if (!confirm(`¿Desea procesar la devolución de la ${tipoNombre} #${numeroDoc}?\n\nEsto generará automáticamente una Nota de Crédito por el monto total y marcará el documento como "Devuelto".`)) {
+        return;
+    }
+    
+    fetch(`/api/documentos/${docId}/devolucion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${result.message}`);
+            // Recargar todas las secciones
+            cargarDeudas();
+            cargarResumen();
+            buscarDocumentos();
+            cargarDetalleProyecto();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error));
 }
 
 // Cargar Top Clientes
