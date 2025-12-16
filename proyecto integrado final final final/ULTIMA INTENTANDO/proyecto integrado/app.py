@@ -481,6 +481,146 @@ def administracion():
     return render_template('administracion.html')
 
 
+# ============================================================
+# API USUARIOS/PERFILES
+# ============================================================
+
+@app.route('/api/usuarios', methods=['GET', 'POST'])
+@app.route('/api/usuarios-dev', methods=['GET', 'POST'])
+@login_required
+def api_usuarios():
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('SELECT id, username, nombre, email, rol, activo, fecha_creacion FROM usuarios ORDER BY username')
+            return jsonify(cur.fetchall())
+        
+        # POST - crear usuario
+        data = request.get_json() or {}
+        username = (data.get('username') or '').strip().lower()
+        nombre = (data.get('nombre') or '').strip()
+        email = (data.get('email') or '').strip()
+        password = data.get('password', '')
+        rol = data.get('rol', 'usuario')
+        activo = 1 if data.get('activo', True) else 0
+        
+        if not username or not nombre:
+            return jsonify({'success': False, 'error': 'Usuario y nombre son obligatorios'}), 400
+        
+        if not password or len(password) < 8:
+            return jsonify({'success': False, 'error': 'Contraseña debe tener mínimo 8 caracteres'}), 400
+        
+        # Verificar si existe
+        cur.execute('SELECT id FROM usuarios WHERE username=%s', (username,))
+        if cur.fetchone():
+            return jsonify({'success': False, 'error': 'El usuario ya existe'}), 400
+        
+        password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+        
+        cur.execute('''
+            INSERT INTO usuarios (username, password_hash, nombre, email, rol, activo)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (username, password_hash, nombre, email, rol, activo))
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Usuario creado'})
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/usuarios/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/api/usuarios-dev/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
+@login_required
+def api_usuario_detalle(user_id):
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('SELECT id, username, nombre, email, rol, activo FROM usuarios WHERE id=%s', (user_id,))
+            user = cur.fetchone()
+            if not user:
+                return jsonify({'error': 'Usuario no encontrado'}), 404
+            return jsonify(user)
+        
+        if request.method == 'DELETE':
+            # No permitir eliminar el propio usuario
+            if user_id == session.get('user_id'):
+                return jsonify({'success': False, 'error': 'No puedes eliminar tu propio usuario'}), 400
+            
+            cur.execute('DELETE FROM usuarios WHERE id=%s', (user_id,))
+            conn.commit()
+            return jsonify({'success': True})
+        
+        # PUT - actualizar usuario
+        data = request.get_json() or {}
+        nombre = (data.get('nombre') or '').strip()
+        email = (data.get('email') or '').strip()
+        password = data.get('password', '')
+        rol = data.get('rol', 'usuario')
+        activo = 1 if data.get('activo', True) else 0
+        
+        if password and len(password) >= 8:
+            password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+            cur.execute('''
+                UPDATE usuarios SET nombre=%s, email=%s, password_hash=%s, rol=%s, activo=%s WHERE id=%s
+            ''', (nombre, email, password_hash, rol, activo, user_id))
+        else:
+            cur.execute('''
+                UPDATE usuarios SET nombre=%s, email=%s, rol=%s, activo=%s WHERE id=%s
+            ''', (nombre, email, rol, activo, user_id))
+        
+        conn.commit()
+        return jsonify({'success': True})
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/cambiar-password', methods=['POST'])
+@login_required
+def api_cambiar_password():
+    data = request.get_json() or {}
+    password_actual = data.get('password_actual', '')
+    password_nueva = data.get('password_nueva', '')
+    
+    if not password_actual or not password_nueva:
+        return jsonify({'success': False, 'error': 'Ambas contraseñas son requeridas'}), 400
+    
+    if len(password_nueva) < 8:
+        return jsonify({'success': False, 'error': 'La nueva contraseña debe tener mínimo 8 caracteres'}), 400
+    
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute('SELECT password_hash FROM usuarios WHERE id=%s', (session['user_id'],))
+        user = cur.fetchone()
+        
+        if not user or not check_password_hash(user['password_hash'], password_actual):
+            return jsonify({'success': False, 'error': 'Contraseña actual incorrecta'}), 400
+        
+        nuevo_hash = generate_password_hash(password_nueva, method='pbkdf2:sha256')
+        cur.execute('UPDATE usuarios SET password_hash=%s WHERE id=%s', (nuevo_hash, session['user_id']))
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Contraseña actualizada'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @app.route('/cambiar-password', methods=['GET', 'POST'])
 @login_required
 def cambiar_password():

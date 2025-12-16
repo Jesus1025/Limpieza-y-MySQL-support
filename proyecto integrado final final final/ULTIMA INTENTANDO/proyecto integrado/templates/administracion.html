@@ -1,223 +1,312 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Administración</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body data-user-role="{{ session.rol }}">
-    {% extends "base.html" %}
+{% extends "base.html" %}
 
-    {% block title %}Administración{% endblock %}
+{% block title %}Administración{% endblock %}
 
-    {% block content %}
-    <div class="container-fluid">
-        <!-- Header -->
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <h1 class="h3 mb-0">
-                    <i class="fas fa-cog"></i> Administración
-                </h1>
-                <p class="text-muted mt-1">Gestiona tu cuenta y perfiles de usuario</p>
-            </div>
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h3 mb-0"><i class="fas fa-cog"></i> Administración</h1>
+            <p class="text-muted mt-1">Gestiona tu cuenta y perfiles de usuario</p>
         </div>
+    </div>
 
-        <!-- Tabs -->
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-body">
-                <ul class="nav nav-tabs" id="adminTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="cambiar-password-tab" data-bs-toggle="tab" 
-                                data-bs-target="#cambiar-password" type="button" role="tab">
-                            <i class="fas fa-lock"></i> Cambiar Contraseña
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="perfiles-tab" data-bs-toggle="tab" 
-                                data-bs-target="#perfiles" type="button" role="tab">
-                            <i class="fas fa-users"></i> Gestionar Perfiles
-                        </button>
-                    </li>
-                </ul>
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cambiar-password">
+                        <i class="fas fa-lock"></i> Cambiar Contraseña
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#perfiles" onclick="cargarPerfiles()">
+                        <i class="fas fa-users"></i> Gestionar Perfiles
+                    </button>
+                </li>
+            </ul>
 
-                <div class="tab-content" id="adminTabContent">
-                    <!-- TAB 1: CAMBIAR CONTRASEÑA -->
-                    <div class="tab-pane fade show active" id="cambiar-password" role="tabpanel">
-                        <div class="row mt-4">
-                            <div class="col-md-6">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-key"></i> Cambiar Contraseña
-                                </h5>
-
-                                <form id="formCambiarPassword">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-500">Contraseña Actual *</label>
-                                        <input type="password" class="form-control" id="passwordActual" 
-                                               placeholder="Ingresa tu contraseña actual" required>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label fw-500">Nueva Contraseña *</label>
-                                        <input type="password" class="form-control" id="passwordNueva" 
-                                               placeholder="Ingresa nueva contraseña (mín. 8 caracteres)" required>
-                                        <small class="text-muted">Mínimo 8 caracteres. Usa mayúsculas, minúsculas y números para mayor seguridad.</small>
-                                    </div>
-
-                                    <div class="mb-4">
-                                        <label class="form-label fw-500">Confirmar Nueva Contraseña *</label>
-                                        <input type="password" class="form-control" id="passwordConfirm" 
-                                               placeholder="Confirma tu nueva contraseña" required>
-                                    </div>
-
-                                    <div id="alertaPassword"></div>
-
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-save"></i> Cambiar Contraseña
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="alert alert-info" role="alert">
-                                    <h6 class="alert-heading">
-                                        <i class="fas fa-shield-alt"></i> Recomendaciones de Seguridad
-                                    </h6>
-                                    <ul class="mb-0">
-                                        <li>Usa una contraseña única y fuerte</li>
-                                        <li>Cambia tu contraseña periódicamente</li>
-                                        <li>No compartas tu contraseña con nadie</li>
-                                        <li>Evita usar información personal (nombre, fecha de nacimiento)</li>
-                                        <li>Cierra sesión después de usar la aplicación en computadoras públicas</li>
-                                    </ul>
+            <div class="tab-content" id="adminTabContent">
+                <!-- TAB: CAMBIAR CONTRASEÑA -->
+                <div class="tab-pane fade show active" id="cambiar-password">
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h5 class="mb-4"><i class="fas fa-key"></i> Cambiar Contraseña</h5>
+                            <form id="formCambiarPassword" onsubmit="cambiarPassword(); return false;">
+                                <div class="mb-3">
+                                    <label class="form-label">Contraseña Actual *</label>
+                                    <input type="password" class="form-control" id="passwordActual" required>
                                 </div>
-                            </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Nueva Contraseña *</label>
+                                    <input type="password" class="form-control" id="passwordNueva" required>
+                                    <small class="text-muted">Mínimo 8 caracteres</small>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label">Confirmar Nueva Contraseña *</label>
+                                    <input type="password" class="form-control" id="passwordConfirm" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Cambiar Contraseña
+                                </button>
+                            </form>
                         </div>
                     </div>
+                </div>
 
-                    <!-- TAB 2: GESTIONAR PERFILES -->
-                    <div class="tab-pane fade" id="perfiles" role="tabpanel">
-                        <div class="mt-4">
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <h5><i class="fas fa-users-cog"></i> Perfiles de Usuario</h5>
-                                </div>
-                                <div class="col-md-6 text-end">
-                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoPerfil">
-                                        <i class="fas fa-user-plus"></i> Nuevo Perfil
-                                    </button>
-                                </div>
+                <!-- TAB: GESTIONAR PERFILES -->
+                <div class="tab-pane fade" id="perfiles">
+                    <div class="mt-4">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-users-cog"></i> Perfiles de Usuario</h5>
                             </div>
+                            <div class="col-md-6 text-end">
+                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoPerfil" onclick="limpiarFormularioPerfil()">
+                                    <i class="fas fa-user-plus"></i> Nuevo Perfil
+                                </button>
+                            </div>
+                        </div>
 
-                            <div class="table-responsive">
-                                <table class="table table-hover table-striped">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Usuario</th>
-                                            <th>Nombre</th>
-                                            <th>Email</th>
-                                            <th>Rol</th>
-                                            <th>Estado</th>
-                                            <th>Fecha Creación</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="cuerpoTablaPerfiles">
-                                        <!-- Se carga con JavaScript -->
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Usuario</th>
+                                        <th>Nombre</th>
+                                        <th>Email</th>
+                                        <th>Rol</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cuerpoTablaPerfiles">
+                                    <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Modal: Nuevo/Editar Perfil -->
-    <div class="modal fade" id="modalNuevoPerfil" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content border-0 shadow-lg">
-                <div class="modal-header bg-light border-0">
-                    <h5 class="modal-title fw-600">
-                        <i class="fas fa-user-plus"></i> <span id="modalPerfilTitulo">Nuevo Perfil</span>
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body p-4">
-                    <form id="formPerfil">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-500">Usuario (username) *</label>
-                                <input type="text" class="form-control" id="perfilUsername" 
-                                       placeholder="nombre_usuario" required>
-                                <small class="text-muted">Sin espacios, letras y números</small>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-500">Nombre Completo *</label>
-                                <input type="text" class="form-control" id="perfilNombre" 
-                                       placeholder="Juan Pérez" required>
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-500">Email *</label>
-                                <input type="email" class="form-control" id="perfilEmail" 
-                                       placeholder="correo@empresa.com" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-500">Rol *</label>
-                                <select class="form-select" id="perfilRol" required>
-                                    <option value="">Seleccionar rol...</option>
-                                    <option value="admin">Admin (Acceso Total)</option>
-                                    <option value="usuario">Usuario (Acceso Limitado)</option>
-                                    <option value="consulta">Consulta (Solo Lectura)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="row mb-3" id="filaPassword">
-                            <div class="col-md-12">
-                                <label class="form-label fw-500">Contraseña *</label>
-                                <input type="password" class="form-control" id="perfilPassword" 
-                                       placeholder="Contraseña (mín. 8 caracteres)">
-                                <small class="text-muted">Dejar vacío para mantener contraseña actual (solo edición)</small>
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="perfilActivo" checked>
-                                    <label class="form-check-label" for="perfilActivo">
-                                        <strong>Perfil Activo</strong>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="alertasFormularioPerfil"></div>
-
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Cancelar
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> <span id="btnGuardarPerfilTexto">Guardar Perfil</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
+<!-- Modal: Nuevo/Editar Perfil -->
+<div class="modal fade" id="modalNuevoPerfil" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-user-plus"></i> <span id="modalPerfilTitulo">Nuevo Perfil</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formPerfil">
+                    <input type="hidden" id="perfilId">
+                    <div class="mb-3">
+                        <label class="form-label">Usuario *</label>
+                        <input type="text" class="form-control" id="perfilUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre Completo *</label>
+                        <input type="text" class="form-control" id="perfilNombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="perfilEmail">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol *</label>
+                        <select class="form-select" id="perfilRol" required>
+                            <option value="usuario">Usuario</option>
+                            <option value="admin">Admin</option>
+                            <option value="consulta">Consulta</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña</label>
+                        <input type="password" class="form-control" id="perfilPassword">
+                        <small class="text-muted">Mínimo 8 caracteres. Vacío = mantener actual</small>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="perfilActivo" checked>
+                        <label class="form-check-label" for="perfilActivo">Activo</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarPerfil()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="{{ url_for('static', filename='js/administracion.js', _t=12345) }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% endblock %}
-</body>
-</html>
+{% block scripts %}
+<script>
+let perfilesActuales = [];
+let perfilEditando = null;
+
+function cargarPerfiles() {
+    fetch('/api/usuarios-dev')
+    .then(r => r.json())
+    .then(data => {
+        perfilesActuales = Array.isArray(data) ? data : [];
+        renderizarPerfiles(perfilesActuales);
+    })
+    .catch(e => {
+        console.error('Error:', e);
+        alert('Error al cargar perfiles');
+    });
+}
+
+function renderizarPerfiles(perfiles) {
+    const tbody = document.getElementById('cuerpoTablaPerfiles');
+    if (!tbody) return;
+    
+    if (perfiles.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay perfiles</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = perfiles.map(p => {
+        const estado = p.activo == 1 
+            ? '<span class="badge bg-success">Activo</span>' 
+            : '<span class="badge bg-secondary">Inactivo</span>';
+        const rol = '<span class="badge bg-info">' + (p.rol || 'usuario') + '</span>';
+        
+        return `<tr>
+            <td>${p.username}</td>
+            <td>${p.nombre || '-'}</td>
+            <td>${p.email || '-'}</td>
+            <td>${rol}</td>
+            <td>${estado}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-warning" onclick="editarPerfil(${p.id})"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarPerfil(${p.id}, '${p.username}')"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function limpiarFormularioPerfil() {
+    document.getElementById('perfilId').value = '';
+    document.getElementById('perfilUsername').value = '';
+    document.getElementById('perfilUsername').readOnly = false;
+    document.getElementById('perfilNombre').value = '';
+    document.getElementById('perfilEmail').value = '';
+    document.getElementById('perfilRol').value = 'usuario';
+    document.getElementById('perfilPassword').value = '';
+    document.getElementById('perfilActivo').checked = true;
+    document.getElementById('modalPerfilTitulo').textContent = 'Nuevo Perfil';
+    perfilEditando = null;
+}
+
+function editarPerfil(id) {
+    const perfil = perfilesActuales.find(p => p.id == id);
+    if (!perfil) return alert('Perfil no encontrado');
+    
+    perfilEditando = id;
+    document.getElementById('perfilId').value = id;
+    document.getElementById('perfilUsername').value = perfil.username;
+    document.getElementById('perfilUsername').readOnly = true;
+    document.getElementById('perfilNombre').value = perfil.nombre || '';
+    document.getElementById('perfilEmail').value = perfil.email || '';
+    document.getElementById('perfilRol').value = perfil.rol || 'usuario';
+    document.getElementById('perfilPassword').value = '';
+    document.getElementById('perfilActivo').checked = perfil.activo == 1;
+    document.getElementById('modalPerfilTitulo').textContent = 'Editar: ' + perfil.username;
+    
+    new bootstrap.Modal(document.getElementById('modalNuevoPerfil')).show();
+}
+
+function guardarPerfil() {
+    const id = document.getElementById('perfilId').value;
+    const datos = {
+        username: document.getElementById('perfilUsername').value.trim(),
+        nombre: document.getElementById('perfilNombre').value.trim(),
+        email: document.getElementById('perfilEmail').value.trim(),
+        rol: document.getElementById('perfilRol').value,
+        password: document.getElementById('perfilPassword').value,
+        activo: document.getElementById('perfilActivo').checked
+    };
+    
+    if (!datos.username || !datos.nombre) {
+        return alert('Usuario y nombre son obligatorios');
+    }
+    
+    const url = id ? `/api/usuarios-dev/${id}` : '/api/usuarios-dev';
+    const method = id ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(id ? 'Perfil actualizado' : 'Perfil creado');
+            bootstrap.Modal.getInstance(document.getElementById('modalNuevoPerfil')).hide();
+            cargarPerfiles();
+        } else {
+            alert('Error: ' + (data.error || 'Error desconocido'));
+        }
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function eliminarPerfil(id, username) {
+    if (!confirm('¿Eliminar el usuario "' + username + '"?')) return;
+    
+    fetch('/api/usuarios-dev/' + id, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Perfil eliminado');
+            cargarPerfiles();
+        } else {
+            alert('Error: ' + (data.error || 'Error al eliminar'));
+        }
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function cambiarPassword() {
+    const actual = document.getElementById('passwordActual').value;
+    const nueva = document.getElementById('passwordNueva').value;
+    const confirmar = document.getElementById('passwordConfirm').value;
+    
+    if (!actual || !nueva || !confirmar) {
+        return alert('Todos los campos son obligatorios');
+    }
+    
+    if (nueva !== confirmar) {
+        return alert('Las contraseñas no coinciden');
+    }
+    
+    if (nueva.length < 8) {
+        return alert('La contraseña debe tener mínimo 8 caracteres');
+    }
+    
+    fetch('/api/cambiar-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password_actual: actual, password_nueva: nueva })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Contraseña cambiada correctamente');
+            document.getElementById('formCambiarPassword').reset();
+        } else {
+            alert('Error: ' + (data.error || 'Error al cambiar contraseña'));
+        }
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+</script>
+{% endblock %}
