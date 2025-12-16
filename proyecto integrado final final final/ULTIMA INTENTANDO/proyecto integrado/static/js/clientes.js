@@ -318,21 +318,26 @@ function guardarCliente() {
   })
     .then(r => r.json())
     .then(data => {
-      mostrarAlerta('Cliente guardado correctamente', 'success');
-      try {
-        if (window.bootstrap && bootstrap.Modal) {
-          const modal = document.getElementById('modalClienteNuevo');
-          bootstrap.Modal.getInstance(modal).hide();
+      if (data.success) {
+        mostrarAlerta('Cliente guardado correctamente', 'success');
+        try {
+          if (window.bootstrap && bootstrap.Modal) {
+            const modal = document.getElementById('modalClienteNuevo');
+            bootstrap.Modal.getInstance(modal).hide();
+          }
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error(e);
+        limpiarFormulario();
+        cargarClientes();
+      } else {
+        mostrarAlerta(data.error || 'Error al guardar cliente', 'danger');
+        console.error('Error del servidor:', data);
       }
-      limpiarFormulario();
-      cargarClientes();
     })
     .catch(e => {
       console.error('Error guardarCliente:', e);
-      mostrarAlerta('Error al guardar', 'danger');
+      mostrarAlerta('Error de conexión al guardar', 'danger');
     });
 }
 
