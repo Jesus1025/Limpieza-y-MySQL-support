@@ -913,17 +913,38 @@ def api_generar_documento():
     
     try:
         data = request.get_json()
+        
+        # Validaciones básicas
+        if not data.get('numero_doc'):
+            return jsonify({'success': False, 'error': 'Número de documento requerido'}), 400
+        if not data.get('cliente_rut'):
+            return jsonify({'success': False, 'error': 'Cliente requerido'}), 400
+        if not data.get('tipo_doc'):
+            return jsonify({'success': False, 'error': 'Tipo de documento requerido'}), 400
+        
+        # Verificar que no exista el número de documento para ese tipo
+        cur.execute('SELECT id FROM documentos WHERE numero_doc=%s AND tipo_doc=%s', 
+                   (data['numero_doc'], data['tipo_doc']))
+        if cur.fetchone():
+            return jsonify({'success': False, 'error': f"Ya existe {data['tipo_doc']} con número {data['numero_doc']}"}), 400
+        
         cur.execute('''
             INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s)
         ''', (
-            data['numero_doc'], data['tipo_doc'], data['fecha_emision'],
-            data['cliente_rut'], data['descripcion'],
-            data['valor_neto'], data['iva'], data['valor_total'],
-            data.get('forma_pago','Contado'), data.get('proyecto_codigo')
+            data['numero_doc'], 
+            data['tipo_doc'], 
+            data.get('fecha_emision') or datetime.now().strftime('%Y-%m-%d'),
+            data['cliente_rut'], 
+            data.get('descripcion', ''),
+            data.get('valor_neto', 0), 
+            data.get('iva', 0), 
+            data.get('valor_total', 0),
+            data.get('forma_pago', 'Contado'), 
+            data.get('proyecto_codigo') or None
         ))
         conn.commit()
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'message': 'Documento generado correctamente'})
     except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1064,13 +1085,22 @@ def api_ultimos_documentos(tipo):
     conn = get_db()
     cur = conn.cursor()
     cur.execute('''
-        SELECT d.*, c.razon_social FROM documentos d
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
+               d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo,
+               c.razon_social as cliente_nombre
+        FROM documentos d
         LEFT JOIN clientes c ON d.cliente_rut=c.rut
         WHERE d.tipo_doc=%s ORDER BY d.id DESC LIMIT 10
     ''', (tipo,))
     docs = cur.fetchall()
     conn.close()
-    return jsonify(docs)
+    
+    # Formatear fechas para JSON
+    for doc in docs:
+        if doc.get('fecha_emision'):
+            doc['fecha_emision'] = str(doc['fecha_emision'])
+    
+    return jsonify({'documentos': docs})
 
 
 @app.route('/api/generar-boleta-rapida', methods=['POST'])
