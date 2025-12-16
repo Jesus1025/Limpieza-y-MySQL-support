@@ -97,6 +97,40 @@ def login_required(f):
 # RUTAS DE PRUEBA
 # ============================================================
 
+@app.route('/api/test-insert')
+def test_insert():
+    """Insertar cliente de prueba directamente"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        # Intentar insertar cliente de prueba
+        cur.execute('''
+            INSERT INTO clientes (rut, razon_social, giro, telefono, email, direccion, activo)
+            VALUES (%s, %s, %s, %s, %s, %s, 1)
+        ''', ('11111111-1', 'CLIENTE PRUEBA', 'Servicios', '+56912345678', 'test@test.cl', 'Direccion Test'))
+        
+        conn.commit()
+        
+        # Verificar que se insertó
+        cur.execute("SELECT COUNT(*) as total FROM clientes")
+        total = cur.fetchone()['total']
+        
+        cur.execute("SELECT * FROM clientes ORDER BY id DESC LIMIT 1")
+        ultimo = cur.fetchone()
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cliente de prueba insertado',
+            'total_clientes': total,
+            'ultimo_cliente': ultimo
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/test-db')
 def test_db():
     """Probar conexión y ver estructura"""
