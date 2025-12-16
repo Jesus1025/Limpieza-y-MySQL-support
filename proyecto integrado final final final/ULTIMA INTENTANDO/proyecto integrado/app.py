@@ -424,6 +424,52 @@ def crear_tablas():
 # LOGIN / LOGOUT
 # ============================================================
 
+@app.route('/api/migrar-bd')
+def migrar_bd():
+    """Migrar base de datos - agregar columnas nuevas"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        resultados = []
+        
+        # Verificar si la columna motivo_nc_nd existe
+        cur.execute("""
+            SELECT COUNT(*) as existe FROM information_schema.columns 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'documentos' 
+            AND column_name = 'motivo_nc_nd'
+        """)
+        if cur.fetchone()['existe'] == 0:
+            cur.execute("ALTER TABLE documentos ADD COLUMN motivo_nc_nd VARCHAR(255)")
+            resultados.append('Columna motivo_nc_nd agregada')
+        else:
+            resultados.append('Columna motivo_nc_nd ya existe')
+        
+        # Verificar si la columna documento_referencia_id existe
+        cur.execute("""
+            SELECT COUNT(*) as existe FROM information_schema.columns 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'documentos' 
+            AND column_name = 'documento_referencia_id'
+        """)
+        if cur.fetchone()['existe'] == 0:
+            cur.execute("ALTER TABLE documentos ADD COLUMN documento_referencia_id INT")
+            resultados.append('Columna documento_referencia_id agregada')
+        else:
+            resultados.append('Columna documento_referencia_id ya existe')
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Migración completada',
+            'resultados': resultados
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'user_id' in session:
@@ -630,7 +676,9 @@ def notas_debito():
         {'codigo': '4', 'descripcion': 'Cargo por servicio adicional'},
         {'codigo': '5', 'descripcion': 'Ajuste de precio'},
         {'codigo': '6', 'descripcion': 'Recargo por flete'},
-        {'codigo': '7', 'descripcion': 'Otros cargos'},
+        {'codigo': '7', 'descripcion': 'Devolución de descuento'},
+        {'codigo': '8', 'descripcion': 'Devolución'},
+        {'codigo': '9', 'descripcion': 'Otros cargos'},
     ]
     
     return render_template('notas_debito.html', 
