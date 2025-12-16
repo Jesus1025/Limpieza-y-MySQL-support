@@ -192,5 +192,56 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
+<script>
+// Forzar que guardarCliente esté disponible globalmente
+window.guardarCliente = function() {
+  const rut = document.getElementById('clienteRut').value.trim();
+  const razonSocial = document.getElementById('clienteRazonSocial').value.trim();
+  
+  console.log('=== GUARDANDO CLIENTE ===');
+  console.log('RUT:', rut);
+  console.log('Razón Social:', razonSocial);
+  
+  if (!rut || !razonSocial) {
+    alert('RUT y Razón Social son requeridos');
+    return;
+  }
+  
+  const datos = {
+    rut: rut,
+    razon_social: razonSocial,
+    giro: (document.getElementById('clienteGiro') || {}).value || '',
+    telefono: (document.getElementById('clienteTelefono') || {}).value || '',
+    email: (document.getElementById('clienteEmail') || {}).value || '',
+    direccion: (document.getElementById('clienteDireccion') || {}).value || '',
+    observaciones: (document.getElementById('clienteObservaciones') || {}).value || '',
+    banco: (document.getElementById('clienteBanco') || {}).value || '',
+    cuenta_corriente: (document.getElementById('clienteCuentaCorriente') || {}).value || '',
+    activo: 1
+  };
+  
+  console.log('Enviando:', datos);
+  
+  fetch('/api/clientes-dev', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos)
+  })
+  .then(r => r.json())
+  .then(data => {
+    console.log('Respuesta:', data);
+    if (data.success) {
+      alert('Cliente guardado!');
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Error desconocido'));
+    }
+  })
+  .catch(e => {
+    console.error('Error:', e);
+    alert('Error de conexión: ' + e.message);
+  });
+};
+</script>
+<script src="{{ url_for('static', filename='js/clientes.js') }}?v={{ range(1000, 9999) | random }}"></script>
 {% endblock %}

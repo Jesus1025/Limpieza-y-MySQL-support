@@ -293,6 +293,10 @@ function guardarCliente() {
   const rut = document.getElementById('clienteRut').value.trim();
   const razonSocial = document.getElementById('clienteRazonSocial').value.trim();
   
+  console.log('=== GUARDANDO CLIENTE ===');
+  console.log('RUT:', rut);
+  console.log('Razón Social:', razonSocial);
+  
   if (!rut || !razonSocial) {
     mostrarAlerta('RUT y Razón Social son requeridos', 'danger');
     return;
@@ -301,43 +305,50 @@ function guardarCliente() {
   const datos = {
     rut: rut,
     razon_social: razonSocial,
-    giro: document.getElementById('clienteGiro').value.trim(),
-    telefono: document.getElementById('clienteTelefono').value.trim(),
-    email: document.getElementById('clienteEmail').value.trim(),
-    direccion: document.getElementById('clienteDireccion').value.trim(),
-    observaciones: document.getElementById('clienteObservaciones').value.trim(),
-    banco: document.getElementById('clienteBanco').value.trim(),
-    cuenta_corriente: document.getElementById('clienteCuentaCorriente').value.trim(),
-    activo: document.getElementById('clienteActivo').checked ? 1 : 0
+    giro: (document.getElementById('clienteGiro') || {}).value || '',
+    telefono: (document.getElementById('clienteTelefono') || {}).value || '',
+    email: (document.getElementById('clienteEmail') || {}).value || '',
+    direccion: (document.getElementById('clienteDireccion') || {}).value || '',
+    observaciones: (document.getElementById('clienteObservaciones') || {}).value || '',
+    banco: (document.getElementById('clienteBanco') || {}).value || '',
+    cuenta_corriente: (document.getElementById('clienteCuentaCorriente') || {}).value || '',
+    activo: document.getElementById('clienteActivo') ? (document.getElementById('clienteActivo').checked ? 1 : 0) : 1
   };
+  
+  console.log('Datos a enviar:', JSON.stringify(datos));
   
   fetch('/api/clientes-dev', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(datos)
   })
-    .then(r => r.json())
+    .then(r => {
+      console.log('Response status:', r.status);
+      return r.json();
+    })
     .then(data => {
+      console.log('Response data:', data);
       if (data.success) {
         mostrarAlerta('Cliente guardado correctamente', 'success');
         try {
-          if (window.bootstrap && bootstrap.Modal) {
-            const modal = document.getElementById('modalClienteNuevo');
-            bootstrap.Modal.getInstance(modal).hide();
+          const modal = document.getElementById('modalClienteNuevo');
+          if (modal && window.bootstrap && bootstrap.Modal) {
+            const bsModal = bootstrap.Modal.getInstance(modal);
+            if (bsModal) bsModal.hide();
           }
         } catch (e) {
-          console.error(e);
+          console.error('Error cerrando modal:', e);
         }
         limpiarFormulario();
-        cargarClientes();
+        cargarClientes('activo');
       } else {
-        mostrarAlerta(data.error || 'Error al guardar cliente', 'danger');
+        mostrarAlerta('ERROR: ' + (data.error || 'Error desconocido'), 'danger');
         console.error('Error del servidor:', data);
       }
     })
     .catch(e => {
-      console.error('Error guardarCliente:', e);
-      mostrarAlerta('Error de conexión al guardar', 'danger');
+      console.error('Error en fetch:', e);
+      mostrarAlerta('Error de conexión: ' + e.message, 'danger');
     });
 }
 
@@ -345,9 +356,12 @@ function limpiarFormulario() {
   const form = document.getElementById('formCliente');
   if (form) form.reset();
   
-  document.getElementById('clienteRut').readOnly = false;
-  document.getElementById('modalTitulo').textContent = 'Nuevo Cliente';
-  document.getElementById('btnGuardarTexto').textContent = 'Guardar';
+  const rutInput = document.getElementById('clienteRut');
+  if (rutInput) rutInput.readOnly = false;
+  
+  const titulo = document.getElementById('modalTitulo');
+  if (titulo) titulo.textContent = 'Nuevo Cliente';
+  
   clienteEnEdicion = null;
 }
 
