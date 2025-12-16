@@ -368,44 +368,46 @@ function formatMoney(amount) {
 
 // Cargar últimas facturas
 function cargarUltimasFacturas() {
-    fetch('/api/ultimos-documentos/FAC', {
-        credentials: 'same-origin'
-    })
+    console.log('Cargando facturas...');
+    fetch('/api/ultimos-documentos/FAC')
         .then(response => {
-            if (response.status === 401) {
-                window.location.href = '/login';
-                throw new Error('Sesión expirada');
-            }
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
+            console.log('Response status:', response.status);
             return response.json();
         })
         .then(data => {
+            console.log('Data recibida:', data);
             const tbody = document.getElementById('tablaUltimasFacturas');
-            if (data && data.documentos && data.documentos.length > 0) {
+            
+            // Manejar ambos formatos: array directo o {documentos: [...]}
+            let docs = [];
+            if (Array.isArray(data)) {
+                docs = data;
+            } else if (data && data.documentos) {
+                docs = data.documentos;
+            }
+            
+            console.log('Documentos a mostrar:', docs.length);
+            
+            if (docs.length > 0) {
                 let html = '';
-                data.documentos.forEach(doc => {
+                docs.forEach(doc => {
                     let estadoClass = 'bg-secondary';
                     if (doc.estado === 'Pagado') estadoClass = 'bg-success';
                     else if (doc.estado === 'Anulado') estadoClass = 'bg-danger';
-                    else if (doc.estado === 'Pendiente') estadoClass = 'bg-warning';
+                    else if (doc.estado === 'Pendiente') estadoClass = 'bg-warning text-dark';
                     
                     html += `
                         <tr>
                             <td><strong>${doc.numero_doc}</strong></td>
-                            <td>${doc.fecha_emision}</td>
-                            <td>${doc.cliente_nombre || 'N/A'}</td>
+                            <td>${doc.fecha_emision || '-'}</td>
+                            <td>${doc.cliente_nombre || doc.razon_social || 'N/A'}</td>
                             <td>${doc.proyecto_codigo || '-'}</td>
                             <td><strong>${formatMoney(doc.valor_total)}</strong></td>
                             <td><span class="badge ${estadoClass}">${doc.estado}</span></td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-success" onclick="cambiarEstadoFactura(${doc.id}, 'Pagado')" title="Marcar Pagado">
+                                    <button class="btn btn-outline-success" onclick="cambiarEstadoFactura(${doc.id}, 'Pagado')" title="Pagado">
                                         <i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-outline-warning" onclick="cambiarEstadoFactura(${doc.id}, 'Pendiente')" title="Marcar Pendiente">
-                                        <i class="fas fa-clock"></i>
                                     </button>
                                     <button class="btn btn-outline-danger" onclick="cambiarEstadoFactura(${doc.id}, 'Anulado')" title="Anular">
                                         <i class="fas fa-ban"></i>

@@ -107,6 +107,37 @@ def login_required(f):
 # RUTAS DE PRUEBA
 # ============================================================
 
+@app.route('/api/test-documentos')
+def test_documentos():
+    """Ver documentos en la BD"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT COUNT(*) as total FROM documentos")
+        total = cur.fetchone()['total']
+        
+        cur.execute("SELECT * FROM documentos ORDER BY id DESC LIMIT 5")
+        docs = cur.fetchall()
+        
+        # Convertir fechas a string
+        for doc in docs:
+            if doc.get('fecha_emision'):
+                doc['fecha_emision'] = str(doc['fecha_emision'])
+            if doc.get('fecha_creacion'):
+                doc['fecha_creacion'] = str(doc['fecha_creacion'])
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'total_documentos': total,
+            'ultimos_documentos': docs
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/test-insert')
 def test_insert():
     """Insertar cliente de prueba directamente"""
@@ -958,13 +989,22 @@ def api_docs_pendientes():
     conn = get_db()
     cur = conn.cursor()
     cur.execute('''
-        SELECT d.*, c.razon_social as cliente FROM documentos d
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
+               d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo,
+               c.razon_social
+        FROM documentos d
         LEFT JOIN clientes c ON d.cliente_rut=c.rut
-        WHERE d.estado='Pendiente' ORDER BY d.fecha_emision DESC LIMIT 10
+        WHERE d.estado='Pendiente' ORDER BY d.fecha_emision DESC
     ''')
     docs = cur.fetchall()
     conn.close()
-    return jsonify(docs)
+    
+    # Formatear fechas
+    for doc in docs:
+        if doc.get('fecha_emision'):
+            doc['fecha_emision'] = str(doc['fecha_emision'])
+    
+    return jsonify({'documentos': docs})
 
 
 @app.route('/api/documentos/<int:doc_id>/estado', methods=['PUT'])
@@ -994,14 +1034,15 @@ def api_reporte_deudas():
     conn = get_db()
     cur = conn.cursor()
     cur.execute('''
-        SELECT c.rut, c.razon_social, COUNT(d.id) as cantidad, COALESCE(SUM(d.valor_total),0) as total
+        SELECT c.rut as cliente_rut, c.razon_social, COUNT(d.id) as cantidad_docs, COALESCE(SUM(d.valor_total),0) as total_deuda
         FROM clientes c
         LEFT JOIN documentos d ON c.rut=d.cliente_rut AND d.estado='Pendiente'
-        WHERE c.activo=1 GROUP BY c.rut, c.razon_social HAVING total > 0
+        WHERE c.activo=1 GROUP BY c.rut, c.razon_social HAVING total_deuda > 0
+        ORDER BY total_deuda DESC
     ''')
     result = cur.fetchall()
     conn.close()
-    return jsonify(result)
+    return jsonify({'deudas': result})
 
 
 @app.route('/api/reporte-resumen')
@@ -1029,6 +1070,281 @@ def api_reporte_resumen():
         'total_pendiente': pendiente,
         'total_documentos': total
     })
+
+
+@app.route('/api/buscar-documentos')
+@login_required
+def api_buscar_documentos():
+    """Buscar documentos con filtros"""
+    tipo_doc = request.args.get('tipo_doc', '')
+    estado = request.args.get('estado', '')
+    fecha_desde = request.args.get('fecha_desde', '')
+    fecha_hasta = request.args.get('fecha_hasta', '')
+    proyecto = request.args.get('proyecto', '')
+    
+    conn = get_db()
+    cur = conn.cursor()
+    
+    query = '''
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
+               d.descripcion, d.valor_neto, d.iva, d.valor_total, d.estado, 
+               d.proyecto_codigo, c.razon_social
+        FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        WHERE 1=1
+    '''
+    params = []
+    
+    if tipo_doc:
+        query += ' AND d.tipo_doc=%s'
+        params.append(tipo_doc)
+    if estado:
+        query += ' AND d.estado=%s'
+        params.append(estado)
+    if fecha_desde:
+        query += ' AND d.fecha_emision >= %s'
+        params.append(fecha_desde)
+    if fecha_hasta:
+        query += ' AND d.fecha_emision <= %s'
+        params.append(fecha_hasta)
+    if proyecto:
+        query += ' AND d.proyecto_codigo=%s'
+        params.append(proyecto)
+    
+    query += ' ORDER BY d.fecha_emision DESC, d.id DESC LIMIT 500'
+    
+    cur.execute(query, params)
+    docs = cur.fetchall()
+    conn.close()
+    
+    # Formatear fechas
+    for doc in docs:
+        if doc.get('fecha_emision'):
+            doc['fecha_emision'] = str(doc['fecha_emision'])
+    
+    return jsonify({'documentos': docs})
+
+
+@app.route('/api/proyecto/<codigo>/progreso')
+@login_required
+def api_proyecto_progreso(codigo):
+    """Obtener progreso financiero de un proyecto"""
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # Datos del proyecto
+    cur.execute('''
+        SELECT p.*, c.razon_social 
+        FROM proyectos p 
+        LEFT JOIN clientes c ON p.cliente_rut=c.rut 
+        WHERE p.codigo=%s
+    ''', (codigo,))
+    proyecto = cur.fetchone()
+    
+    if not proyecto:
+        conn.close()
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    
+    # Documentos del proyecto
+    cur.execute('''
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.valor_total, 
+               d.estado, c.razon_social
+        FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        WHERE d.proyecto_codigo=%s
+        ORDER BY d.fecha_emision DESC
+    ''', (codigo,))
+    documentos = cur.fetchall()
+    
+    # Calcular totales
+    cur.execute('''
+        SELECT 
+            COALESCE(SUM(CASE WHEN tipo_doc IN ('FAC','BOL') THEN valor_total ELSE 0 END), 0) as facturado,
+            COALESCE(SUM(CASE WHEN estado='Pagado' THEN valor_total ELSE 0 END), 0) as cobrado,
+            COALESCE(SUM(CASE WHEN estado='Pendiente' THEN valor_total ELSE 0 END), 0) as pendiente
+        FROM documentos WHERE proyecto_codigo=%s
+    ''', (codigo,))
+    totales = cur.fetchone()
+    
+    conn.close()
+    
+    # Formatear fechas
+    for doc in documentos:
+        if doc.get('fecha_emision'):
+            doc['fecha_emision'] = str(doc['fecha_emision'])
+    
+    presupuesto = float(proyecto.get('presupuesto') or 0)
+    facturado = float(totales.get('facturado') or 0)
+    progreso = (facturado / presupuesto * 100) if presupuesto > 0 else 0
+    
+    return jsonify({
+        'proyecto': {
+            'codigo': proyecto['codigo'],
+            'nombre': proyecto['nombre'],
+            'cliente': proyecto.get('razon_social', 'N/A'),
+            'presupuesto': presupuesto,
+            'estado': proyecto.get('estado', 'Activo')
+        },
+        'financiero': {
+            'facturado': facturado,
+            'cobrado': float(totales.get('cobrado') or 0),
+            'pendiente': float(totales.get('pendiente') or 0),
+            'progreso': round(progreso, 1)
+        },
+        'documentos': documentos
+    })
+
+
+@app.route('/api/top-clientes')
+@login_required
+def api_top_clientes():
+    """Top 10 clientes por facturación"""
+    conn = get_db()
+    cur = conn.cursor()
+    
+    cur.execute('''
+        SELECT c.rut, c.razon_social,
+               COUNT(d.id) as cantidad_docs,
+               COALESCE(SUM(d.valor_total), 0) as total_facturado,
+               COALESCE(SUM(CASE WHEN d.estado='Pagado' THEN d.valor_total ELSE 0 END), 0) as total_pagado,
+               COALESCE(SUM(CASE WHEN d.estado='Pendiente' THEN d.valor_total ELSE 0 END), 0) as total_pendiente
+        FROM clientes c
+        LEFT JOIN documentos d ON c.rut=d.cliente_rut AND d.tipo_doc IN ('FAC','BOL')
+        WHERE c.activo=1
+        GROUP BY c.rut, c.razon_social
+        HAVING total_facturado > 0
+        ORDER BY total_facturado DESC
+        LIMIT 10
+    ''')
+    clientes = cur.fetchall()
+    conn.close()
+    
+    return jsonify({'clientes': clientes})
+
+
+@app.route('/api/cuentas-corrientes')
+@login_required
+def api_cuentas_corrientes():
+    """Obtener lista de cuentas corrientes (bancos) únicos"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT DISTINCT banco FROM clientes WHERE banco IS NOT NULL AND banco != "" AND activo=1 ORDER BY banco')
+    cuentas = [row['banco'] for row in cur.fetchall()]
+    conn.close()
+    return jsonify(cuentas)
+
+
+@app.route('/api/clientes-por-cuenta/<cuenta>')
+@login_required
+def api_clientes_por_cuenta(cuenta):
+    """Obtener clientes filtrados por cuenta corriente/banco"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    clientes = cur.fetchall()
+    conn.close()
+    return jsonify(clientes)
+
+
+@app.route('/api/cuenta-corriente-detalle/<cuenta>')
+@login_required
+def api_cuenta_corriente_detalle(cuenta):
+    """Obtener detalle completo de una cuenta corriente"""
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # Obtener clientes con esta cuenta
+    cur.execute('SELECT rut, razon_social FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    clientes = cur.fetchall()
+    
+    if not clientes:
+        conn.close()
+        return jsonify({'error': 'No hay clientes con esta cuenta'}), 404
+    
+    ruts = [c['rut'] for c in clientes]
+    placeholders = ','.join(['%s'] * len(ruts))
+    
+    # Obtener documentos de estos clientes
+    cur.execute(f'''
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
+               d.valor_total, d.estado, c.razon_social
+        FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        WHERE d.cliente_rut IN ({placeholders})
+        ORDER BY d.fecha_emision DESC
+    ''', ruts)
+    documentos = cur.fetchall()
+    
+    # Calcular totales
+    cur.execute(f'''
+        SELECT 
+            COALESCE(SUM(CASE WHEN estado='Pagado' THEN valor_total ELSE 0 END), 0) as pagado,
+            COALESCE(SUM(CASE WHEN estado='Pendiente' THEN valor_total ELSE 0 END), 0) as pendiente
+        FROM documentos WHERE cliente_rut IN ({placeholders})
+    ''', ruts)
+    totales = cur.fetchone()
+    
+    conn.close()
+    
+    # Formatear fechas
+    for doc in documentos:
+        if doc.get('fecha_emision'):
+            doc['fecha_emision'] = str(doc['fecha_emision'])
+    
+    return jsonify({
+        'cuenta': cuenta,
+        'clientes': clientes,
+        'total_clientes': len(clientes),
+        'documentos': documentos,
+        'total_pagos': float(totales.get('pagado') or 0),
+        'total_deudas': float(totales.get('pendiente') or 0)
+    })
+
+
+@app.route('/api/exportar-cuenta-corriente-csv/<cuenta>')
+@login_required
+def exportar_cuenta_corriente_csv(cuenta):
+    """Exportar clientes y documentos de una cuenta corriente"""
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # Obtener clientes con esta cuenta
+    cur.execute('SELECT rut, razon_social FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    clientes = cur.fetchall()
+    
+    if not clientes:
+        conn.close()
+        return jsonify({'error': 'No hay clientes con esta cuenta'}), 404
+    
+    ruts = [c['rut'] for c in clientes]
+    placeholders = ','.join(['%s'] * len(ruts))
+    
+    # Obtener documentos de estos clientes
+    cur.execute(f'''
+        SELECT d.tipo_doc, d.numero_doc, d.fecha_emision, c.razon_social,
+               d.valor_neto, d.iva, d.valor_total, d.estado
+        FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        WHERE d.cliente_rut IN ({placeholders})
+        ORDER BY d.fecha_emision DESC
+    ''', ruts)
+    docs = cur.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Tipo', 'N° Doc', 'Fecha', 'Cliente', 'Neto', 'IVA', 'Total', 'Estado'])
+    for d in docs:
+        writer.writerow([
+            d['tipo_doc'], d['numero_doc'], str(d['fecha_emision']), d['razon_social'],
+            d['valor_neto'], d['iva'], d['valor_total'], d['estado']
+        ])
+    
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename=cuenta_{cuenta}.csv'}
+    )
 
 
 # ============================================================
@@ -1076,6 +1392,151 @@ def exportar_proyectos():
         '\ufeff' + output.getvalue(),
         mimetype='text/csv',
         headers={'Content-Disposition': 'attachment; filename=proyectos.csv'}
+    )
+
+
+@app.route('/api/exportar-deudas-excel')
+@login_required
+def exportar_deudas_excel():
+    """Exportar deudas pendientes a CSV/Excel"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT c.rut, c.razon_social, COUNT(d.id) as cantidad_docs, COALESCE(SUM(d.valor_total),0) as total_deuda
+        FROM clientes c
+        LEFT JOIN documentos d ON c.rut=d.cliente_rut AND d.estado='Pendiente'
+        WHERE c.activo=1 GROUP BY c.rut, c.razon_social HAVING total_deuda > 0
+        ORDER BY total_deuda DESC
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['RUT', 'Razón Social', 'Documentos Pendientes', 'Total Deuda'])
+    for r in rows:
+        writer.writerow([r['rut'], r['razon_social'], r['cantidad_docs'], r['total_deuda']])
+    
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=deudas_pendientes.csv'}
+    )
+
+
+@app.route('/api/exportar-documentos-excel')
+@login_required
+def exportar_documentos_excel():
+    """Exportar todos los documentos a CSV/Excel"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT d.tipo_doc, d.numero_doc, d.fecha_emision, c.razon_social, 
+               d.descripcion, d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo
+        FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        ORDER BY d.fecha_emision DESC
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Tipo', 'N° Doc', 'Fecha', 'Cliente', 'Descripción', 'Neto', 'IVA', 'Total', 'Estado', 'Proyecto'])
+    for r in rows:
+        writer.writerow([
+            r['tipo_doc'], r['numero_doc'], str(r['fecha_emision']), r['razon_social'] or 'N/A',
+            r['descripcion'] or '', r['valor_neto'], r['iva'], r['valor_total'], 
+            r['estado'], r['proyecto_codigo'] or ''
+        ])
+    
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=documentos.csv'}
+    )
+
+
+@app.route('/api/exportar-documentos-periodo')
+@login_required
+def exportar_documentos_periodo():
+    """Exportar documentos filtrados por período"""
+    fecha_inicio = request.args.get('fecha_inicio', '')
+    fecha_fin = request.args.get('fecha_fin', '')
+    tipo_doc = request.args.get('tipo_doc', '')
+    proyecto = request.args.get('proyecto', '')
+    formato = request.args.get('formato', 'excel')
+    
+    conn = get_db()
+    cur = conn.cursor()
+    
+    query = '''
+        SELECT d.tipo_doc, d.numero_doc, d.fecha_emision, c.razon_social, 
+               d.descripcion, d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo
+        FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        WHERE 1=1
+    '''
+    params = []
+    
+    if fecha_inicio:
+        query += ' AND d.fecha_emision >= %s'
+        params.append(fecha_inicio)
+    if fecha_fin:
+        query += ' AND d.fecha_emision <= %s'
+        params.append(fecha_fin)
+    if tipo_doc:
+        query += ' AND d.tipo_doc = %s'
+        params.append(tipo_doc)
+    if proyecto:
+        query += ' AND d.proyecto_codigo = %s'
+        params.append(proyecto)
+    
+    query += ' ORDER BY d.fecha_emision DESC'
+    
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Tipo', 'N° Doc', 'Fecha', 'Cliente', 'Descripción', 'Neto', 'IVA', 'Total', 'Estado', 'Proyecto'])
+    for r in rows:
+        writer.writerow([
+            r['tipo_doc'], r['numero_doc'], str(r['fecha_emision']), r['razon_social'] or 'N/A',
+            r['descripcion'] or '', r['valor_neto'], r['iva'], r['valor_total'], 
+            r['estado'], r['proyecto_codigo'] or ''
+        ])
+    
+    filename = f'documentos_{fecha_inicio}_{fecha_fin}.csv' if fecha_inicio and fecha_fin else 'documentos_periodo.csv'
+    
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+
+@app.route('/api/exportar-clientes-cuenta/<cuenta>')
+@login_required
+def exportar_clientes_cuenta(cuenta):
+    """Exportar clientes por cuenta corriente"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT rut, razon_social, giro, telefono, email, direccion, banco FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    rows = cur.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['RUT', 'Razón Social', 'Giro', 'Teléfono', 'Email', 'Dirección', 'Banco'])
+    for r in rows:
+        writer.writerow([r['rut'], r['razon_social'], r['giro'], r['telefono'], r['email'], r['direccion'], r['banco']])
+    
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename=clientes_{cuenta}.csv'}
     )
 
 

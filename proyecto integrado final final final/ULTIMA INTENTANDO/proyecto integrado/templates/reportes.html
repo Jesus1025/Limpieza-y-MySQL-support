@@ -774,15 +774,15 @@ function cargarDetalleProyecto() {
             detalle.style.display = '';
             
             document.getElementById('proyPresupuesto').textContent = formatMoney(data.proyecto.presupuesto);
-            document.getElementById('proyFacturado').textContent = formatMoney(data.progreso.total_facturado);
-            document.getElementById('proyCobrado').textContent = formatMoney(data.progreso.total_pagado);
-            document.getElementById('proyPendiente').textContent = formatMoney(data.progreso.total_pendiente);
+            document.getElementById('proyFacturado').textContent = formatMoney(data.financiero.facturado);
+            document.getElementById('proyCobrado').textContent = formatMoney(data.financiero.cobrado);
+            document.getElementById('proyPendiente').textContent = formatMoney(data.financiero.pendiente);
             
-            const porcentaje = data.progreso.porcentaje_pagado;
+            const porcentaje = data.financiero.progreso || 0;
             document.getElementById('proyProgreso').style.width = `${porcentaje}%`;
             document.getElementById('proyProgreso').textContent = `${porcentaje}%`;
             document.getElementById('proyProgresoTexto').textContent = 
-                `Cobrado ${formatMoney(data.progreso.total_pagado)} de ${formatMoney(data.proyecto.presupuesto)} presupuestados`;
+                `Cobrado ${formatMoney(data.financiero.cobrado)} de ${formatMoney(data.proyecto.presupuesto)} presupuestados`;
             
             // Documentos del proyecto
             const tbody = document.getElementById('tablaDocsProyecto');
@@ -796,7 +796,7 @@ function cargarDetalleProyecto() {
                             <td><span class="badge bg-secondary">${tipoLabel}</span></td>
                             <td><strong>${doc.numero_doc}</strong></td>
                             <td>${doc.fecha_emision}</td>
-                            <td>${doc.cliente_nombre || 'N/A'}</td>
+                            <td>${doc.razon_social || 'N/A'}</td>
                             <td class="text-end"><strong>${formatMoney(doc.valor_total)}</strong></td>
                             <td class="text-center"><span class="badge bg-${estadoBadge}">${doc.estado}</span></td>
                             <td class="text-center">
@@ -812,6 +812,10 @@ function cargarDetalleProyecto() {
             } else {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay documentos en este proyecto</td></tr>';
             }
+        })
+        .catch(err => {
+            console.error('Error cargando proyecto:', err);
+            detalle.style.display = 'none';
         });
 }
 
@@ -845,7 +849,7 @@ function cargarTopClientes() {
                             <td class="text-center"><strong>${medal}</strong></td>
                             <td><strong>${c.razon_social}</strong></td>
                             <td>${c.rut}</td>
-                            <td class="text-center">${c.total_documentos}</td>
+                            <td class="text-center">${c.cantidad_docs}</td>
                             <td class="text-end"><strong>${formatMoney(c.total_facturado)}</strong></td>
                             <td class="text-end text-success">${formatMoney(c.total_pagado)}</td>
                             <td class="text-end text-warning">${formatMoney(c.total_pendiente)}</td>
@@ -856,6 +860,10 @@ function cargarTopClientes() {
             } else {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos de clientes</td></tr>';
             }
+        })
+        .catch(err => {
+            console.error('Error cargando top clientes:', err);
+            document.getElementById('tablaTopClientes').innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error al cargar datos</td></tr>';
         });
 }
 
@@ -886,8 +894,13 @@ function generarPdfDeudas() {
     fetch('/api/reporte-deudas')
         .then(r => r.json())
         .then(data => {
-            let html = crearHtmlPdf('Reporte de Deudas Pendientes', generarTablaDeudas(data));
+            const deudas = data.deudas || data || [];
+            let html = crearHtmlPdf('Reporte de Deudas Pendientes', generarTablaDeudas(deudas));
             abrirPdf(html);
+        })
+        .catch(err => {
+            console.error('Error generando PDF deudas:', err);
+            alert('Error al generar el PDF de deudas');
         });
 }
 
@@ -985,14 +998,24 @@ function generarTablaDeudas(data) {
     let html = '<table><thead><tr><th>Cliente</th><th>RUT</th><th class="text-center">Docs. Pendientes</th><th class="text-right">Deuda Total</th></tr></thead><tbody>';
     let totalGeneral = 0;
     
+    if (!data || data.length === 0) {
+        return '<p class="text-center">No hay deudas pendientes</p>';
+    }
+    
     data.forEach(fila => {
+        // Soportar tanto arrays como objetos
+        const cliente = fila.razon_social || fila[1] || 'N/A';
+        const rut = fila.cliente_rut || fila[0] || 'N/A';
+        const cantidad = fila.cantidad_docs || fila[2] || 0;
+        const total = fila.total_deuda || fila[3] || 0;
+        
         html += `<tr>
-            <td>${fila[1]}</td>
-            <td>${fila[0]}</td>
-            <td class="text-center">${fila[2]}</td>
-            <td class="text-right monto">${formatMoney(fila[3])}</td>
+            <td>${cliente}</td>
+            <td>${rut}</td>
+            <td class="text-center">${cantidad}</td>
+            <td class="text-right monto">${formatMoney(total)}</td>
         </tr>`;
-        totalGeneral += fila[3];
+        totalGeneral += parseFloat(total) || 0;
     });
     
     html += `<tr class="total-row"><td colspan="3">TOTAL DEUDAS</td><td class="text-right">${formatMoney(totalGeneral)}</td></tr>`;
@@ -1473,6 +1496,61 @@ function actualizarTodo() {
     cargarResumen();
     cargarDeudas();
     cargarTopClientes();
+}
+
+// Ver detalle de deudas de un cliente específico
+function verDetalleCliente(rut) {
+    if (!rut) return;
+    
+    // Hacer scroll a la sección de documentos
+    document.getElementById('documentos-tab').click();
+    
+    // Buscar documentos pendientes de ese cliente
+    fetch(`/api/buscar-documentos?estado=Pendiente`)
+        .then(r => r.json())
+        .then(data => {
+            const docs = data.documentos || [];
+            const clienteDocs = docs.filter(d => d.cliente_rut === rut);
+            
+            const tbody = document.getElementById('tablaDocumentos');
+            const footer = document.getElementById('footerDocumentos');
+            
+            if (clienteDocs.length > 0) {
+                let html = '';
+                let totalNeto = 0, totalIVA = 0, totalGeneral = 0;
+                
+                clienteDocs.forEach(doc => {
+                    totalNeto += doc.valor_neto || 0;
+                    totalIVA += doc.iva || 0;
+                    totalGeneral += doc.valor_total || 0;
+                    
+                    const tipoLabel = {'FAC': 'Factura', 'BOL': 'Boleta', 'NC': 'N. Crédito', 'ND': 'N. Débito'}[doc.tipo_doc] || doc.tipo_doc;
+                    const tipoBadge = {'FAC': 'primary', 'BOL': 'success', 'NC': 'info', 'ND': 'warning'}[doc.tipo_doc] || 'secondary';
+                    
+                    html += `
+                        <tr>
+                            <td><span class="badge bg-${tipoBadge}">${tipoLabel}</span></td>
+                            <td><strong>${doc.numero_doc}</strong></td>
+                            <td>${doc.fecha_emision}</td>
+                            <td>${doc.razon_social || 'N/A'}</td>
+                            <td><small>${(doc.descripcion || '').substring(0, 30)}...</small></td>
+                            <td class="text-end">${formatMoney(doc.valor_neto)}</td>
+                            <td class="text-end">${formatMoney(doc.iva)}</td>
+                            <td class="text-end"><strong>${formatMoney(doc.valor_total)}</strong></td>
+                            <td class="text-center"><span class="badge bg-warning">Pendiente</span></td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+                footer.style.display = '';
+                document.getElementById('totalNeto').textContent = formatMoney(totalNeto);
+                document.getElementById('totalIVA').textContent = formatMoney(totalIVA);
+                document.getElementById('totalGeneral').textContent = formatMoney(totalGeneral);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No hay documentos pendientes para este cliente</td></tr>';
+                footer.style.display = 'none';
+            }
+        });
 }
 
 // Inicializar
