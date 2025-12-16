@@ -39,6 +39,10 @@ function renderizarTabla(clientes) {
       ? '<span class="badge bg-success">Activo</span>' 
       : '<span class="badge bg-secondary">Inactivo</span>';
     
+    const botonToggle = c.activo == 1
+      ? `<button class="btn btn-sm btn-outline-secondary" onclick="toggleEstadoCliente('${c.rut}')" title="Desactivar cliente"><i class="fas fa-toggle-on"></i></button>`
+      : `<button class="btn btn-sm btn-outline-success" onclick="toggleEstadoCliente('${c.rut}')" title="Activar cliente"><i class="fas fa-toggle-off"></i></button>`;
+    
     return `<tr>
       <td>${formatearRUT(c.rut)}</td>
       <td>${c.razon_social || ''}</td>
@@ -48,9 +52,10 @@ function renderizarTabla(clientes) {
       <td>${c.banco || '-'}</td>
       <td>${estado}</td>
       <td>
-        <button class="btn btn-sm btn-outline-info" onclick="verCliente('${c.rut}')"><i class="fas fa-eye"></i></button>
-        <button class="btn btn-sm btn-outline-warning" onclick="editarCliente('${c.rut}')"><i class="fas fa-edit"></i></button>
-        <button class="btn btn-sm btn-outline-danger" onclick="eliminarCliente('${c.rut}')"><i class="fas fa-trash"></i></button>
+        <button class="btn btn-sm btn-outline-info" onclick="verCliente('${c.rut}')" title="Ver"><i class="fas fa-eye"></i></button>
+        <button class="btn btn-sm btn-outline-warning" onclick="editarCliente('${c.rut}')" title="Editar"><i class="fas fa-edit"></i></button>
+        ${botonToggle}
+        <button class="btn btn-sm btn-outline-danger" onclick="eliminarCliente('${c.rut}')" title="Eliminar"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`;
   }).join('');
