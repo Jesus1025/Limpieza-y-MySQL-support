@@ -657,9 +657,14 @@ function cargarDeudas() {
                             <td class="text-end"><strong>${formatMoney(doc.valor_total)}</strong></td>
                             <td class="text-center"><span class="badge bg-warning">Pendiente</span></td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-success" onclick="marcarPagado(${doc.id})" title="Marcar como Pagado">
-                                    <i class="fas fa-check"></i>
-                                </button>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-success" onclick="cambiarEstadoDocumento(${doc.id}, 'Pagado')" title="Marcar como Pagado">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-danger" onclick="cambiarEstadoDocumento(${doc.id}, 'Anulado')" title="Anular documento">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -673,10 +678,19 @@ function cargarDeudas() {
 
 // Marcar documento como pagado
 function marcarPagado(docId) {
+    cambiarEstadoDocumento(docId, 'Pagado');
+}
+
+// Cambiar estado de documento (Pagado, Pendiente, Anulado)
+function cambiarEstadoDocumento(docId, nuevoEstado) {
+    if (nuevoEstado === 'Anulado' && !confirm('¿Está seguro de anular este documento?')) {
+        return;
+    }
+    
     fetch(`/api/documentos/${docId}/estado`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({estado: 'Pagado'})
+        body: JSON.stringify({estado: nuevoEstado})
     })
     .then(r => r.json())
     .then(result => {
