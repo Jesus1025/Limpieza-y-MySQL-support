@@ -1175,7 +1175,9 @@ def api_proyecto_progreso(codigo):
     
     presupuesto = float(proyecto.get('presupuesto') or 0)
     facturado = float(totales.get('facturado') or 0)
-    progreso = (facturado / presupuesto * 100) if presupuesto > 0 else 0
+    cobrado = float(totales.get('cobrado') or 0)
+    # El progreso se calcula en base a lo PAGADO (cobrado) vs presupuesto
+    progreso = (cobrado / presupuesto * 100) if presupuesto > 0 else 0
     
     return jsonify({
         'proyecto': {
@@ -1187,7 +1189,7 @@ def api_proyecto_progreso(codigo):
         },
         'financiero': {
             'facturado': facturado,
-            'cobrado': float(totales.get('cobrado') or 0),
+            'cobrado': cobrado,
             'pendiente': float(totales.get('pendiente') or 0),
             'progreso': round(progreso, 1)
         },

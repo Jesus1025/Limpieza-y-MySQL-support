@@ -295,8 +295,8 @@ function cargarProgresoProyectos() {
             fetch(`/api/proyecto/${encodeURIComponent(codigo)}/progreso`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.progreso) {
-                        const porcentaje = data.progreso.porcentaje_pagado;
+                    if (data.financiero) {
+                        const porcentaje = Math.round(data.financiero.progreso || 0);
                         const progressBar = document.getElementById(`progressbar-${codigo}`);
                         const progressText = document.getElementById(`progress-text-${codigo}`);
                         
@@ -312,7 +312,7 @@ function cargarProgresoProyectos() {
                             progressBar.className = 'progress-bar bg-warning';
                         }
                         
-                        progressText.textContent = `Pagado: ${formatMoney(data.progreso.total_pagado)} / ${formatMoney(data.proyecto.presupuesto)}`;
+                        progressText.textContent = `Pagado: ${formatMoney(data.financiero.cobrado)} de ${formatMoney(data.proyecto.presupuesto)}`;
                     }
                 })
                 .catch(() => {
@@ -497,12 +497,12 @@ function actualizarDatosModalDocumentos(codigo) {
         .then(data => {
             // Actualizar resumen
             document.getElementById('resumenPresupuesto').textContent = formatMoney(data.proyecto.presupuesto);
-            document.getElementById('resumenFacturado').textContent = formatMoney(data.progreso.total_facturado);
-            document.getElementById('resumenPagado').textContent = formatMoney(data.progreso.total_pagado);
-            document.getElementById('resumenPendiente').textContent = formatMoney(data.progreso.total_pendiente);
+            document.getElementById('resumenFacturado').textContent = formatMoney(data.financiero.facturado);
+            document.getElementById('resumenPagado').textContent = formatMoney(data.financiero.cobrado);
+            document.getElementById('resumenPendiente').textContent = formatMoney(data.financiero.pendiente);
             
             // Actualizar barra de progreso
-            const porcentaje = data.progreso.porcentaje_pagado;
+            const porcentaje = Math.round(data.financiero.progreso || 0);
             document.getElementById('barraProgresoModal').style.width = `${porcentaje}%`;
             document.getElementById('textoProgresoModal').textContent = `${porcentaje}% pagado`;
             
@@ -519,7 +519,7 @@ function actualizarDatosModalDocumentos(codigo) {
                             <td><strong>${doc.numero_doc}</strong></td>
                             <td><span class="badge bg-secondary">${tipoLabel}</span></td>
                             <td>${doc.fecha_emision}</td>
-                            <td>${doc.cliente_nombre || 'N/A'}</td>
+                            <td>${doc.razon_social || 'N/A'}</td>
                             <td><strong>${formatMoney(doc.valor_total)}</strong></td>
                             <td><span class="badge ${estadoClass}">${doc.estado}</span></td>
                             <td>
