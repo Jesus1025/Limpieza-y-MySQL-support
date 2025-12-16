@@ -384,9 +384,21 @@ def crear_tablas():
                 estado VARCHAR(50) DEFAULT 'Pendiente',
                 forma_pago VARCHAR(50) DEFAULT 'Contado',
                 proyecto_codigo VARCHAR(50),
+                motivo_nc_nd VARCHAR(255),
+                documento_referencia_id INT,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ''')
+        
+        # Agregar columnas nuevas si no existen (para BD existentes)
+        try:
+            cur.execute("ALTER TABLE documentos ADD COLUMN motivo_nc_nd VARCHAR(255)")
+        except:
+            pass  # Columna ya existe
+        try:
+            cur.execute("ALTER TABLE documentos ADD COLUMN documento_referencia_id INT")
+        except:
+            pass  # Columna ya existe
         
         # Crear usuario admin si no existe
         pwd = generate_password_hash('admin123', method='pbkdf2:sha256')
@@ -550,8 +562,40 @@ def notas_credito():
     cur = conn.cursor()
     cur.execute("SELECT rut, razon_social FROM clientes WHERE activo=1")
     clientes = cur.fetchall()
+    
+    # Obtener documentos que pueden ser referenciados (Facturas y Boletas)
+    cur.execute("""
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.valor_total, c.razon_social 
+        FROM documentos d 
+        LEFT JOIN clientes c ON d.cliente_rut = c.rut 
+        WHERE d.tipo_doc IN ('FAC', 'BOL') AND d.estado != 'Anulado'
+        ORDER BY d.fecha_emision DESC LIMIT 100
+    """)
+    documentos_referencia = cur.fetchall()
+    
+    # Próximo número de NC
+    cur.execute("SELECT COALESCE(MAX(numero_doc),0) as u FROM documentos WHERE tipo_doc='NC'")
+    ult = cur.fetchone()['u']
+    
     conn.close()
-    return render_template('notas_credito.html', clientes=clientes)
+    
+    # Motivos estándar para NC según SII Chile
+    motivos = [
+        {'codigo': '1', 'descripcion': 'Anula documento de referencia'},
+        {'codigo': '2', 'descripcion': 'Corrige texto del documento de referencia'},
+        {'codigo': '3', 'descripcion': 'Corrige monto del documento de referencia'},
+        {'codigo': '4', 'descripcion': 'Devolución de mercadería'},
+        {'codigo': '5', 'descripcion': 'Descuento o bonificación'},
+        {'codigo': '6', 'descripcion': 'Resciliación de contrato'},
+        {'codigo': '7', 'descripcion': 'Ajuste de precio'},
+    ]
+    
+    return render_template('notas_credito.html', 
+                         clientes=clientes, 
+                         documentos_referencia=documentos_referencia,
+                         motivos=motivos,
+                         proximo_numero=ult+1, 
+                         today=datetime.now().strftime('%Y-%m-%d'))
 
 
 @app.route('/notas-debito')
@@ -561,8 +605,40 @@ def notas_debito():
     cur = conn.cursor()
     cur.execute("SELECT rut, razon_social FROM clientes WHERE activo=1")
     clientes = cur.fetchall()
+    
+    # Obtener documentos que pueden ser referenciados (Facturas y Boletas)
+    cur.execute("""
+        SELECT d.id, d.numero_doc, d.tipo_doc, d.valor_total, c.razon_social 
+        FROM documentos d 
+        LEFT JOIN clientes c ON d.cliente_rut = c.rut 
+        WHERE d.tipo_doc IN ('FAC', 'BOL') AND d.estado != 'Anulado'
+        ORDER BY d.fecha_emision DESC LIMIT 100
+    """)
+    documentos_referencia = cur.fetchall()
+    
+    # Próximo número de ND
+    cur.execute("SELECT COALESCE(MAX(numero_doc),0) as u FROM documentos WHERE tipo_doc='ND'")
+    ult = cur.fetchone()['u']
+    
     conn.close()
-    return render_template('notas_debito.html', clientes=clientes)
+    
+    # Motivos estándar para ND según SII Chile
+    motivos = [
+        {'codigo': '1', 'descripcion': 'Intereses por mora'},
+        {'codigo': '2', 'descripcion': 'Gastos de cobranza'},
+        {'codigo': '3', 'descripcion': 'Diferencia de precio'},
+        {'codigo': '4', 'descripcion': 'Cargo por servicio adicional'},
+        {'codigo': '5', 'descripcion': 'Ajuste de precio'},
+        {'codigo': '6', 'descripcion': 'Recargo por flete'},
+        {'codigo': '7', 'descripcion': 'Otros cargos'},
+    ]
+    
+    return render_template('notas_debito.html', 
+                         clientes=clientes, 
+                         documentos_referencia=documentos_referencia,
+                         motivos=motivos,
+                         proximo_numero=ult+1, 
+                         today=datetime.now().strftime('%Y-%m-%d'))
 
 
 @app.route('/reportes')
@@ -1054,6 +1130,43 @@ def api_proyecto_detalle(codigo):
 
 
 # ============================================================
+# API DOCUMENTOS DE REFERENCIA (para NC/ND)
+# ============================================================
+
+@app.route('/api/documentos-referencia/<rut>')
+@login_required
+def api_documentos_referencia(rut):
+    """Obtener documentos que pueden ser referenciados por NC/ND para un cliente"""
+    conn = get_db()
+    cur = conn.cursor()
+    rut_n = normalize_rut(rut)
+    
+    try:
+        cur.execute("""
+            SELECT id, numero_doc, tipo_doc, fecha_emision, valor_total, estado
+            FROM documentos 
+            WHERE cliente_rut = %s 
+            AND tipo_doc IN ('FAC', 'BOL') 
+            AND estado != 'Anulado'
+            ORDER BY fecha_emision DESC
+            LIMIT 50
+        """, (rut_n,))
+        
+        documentos = cur.fetchall()
+        
+        # Convertir fechas a string
+        for doc in documentos:
+            if doc.get('fecha_emision'):
+                doc['fecha_emision'] = str(doc['fecha_emision'])
+        
+        return jsonify(documentos)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ============================================================
 # API DOCUMENTOS
 # ============================================================
 
@@ -1080,9 +1193,14 @@ def api_generar_documento():
         if cur.fetchone():
             return jsonify({'success': False, 'error': f"Ya existe {data['tipo_doc']} con número {data['numero_doc']}"}), 400
         
+        # El estado para NC y ND puede venir del frontend
+        estado_doc = data.get('estado', 'Pendiente')
+        if data['tipo_doc'] in ('NC', 'ND') and not data.get('estado'):
+            estado_doc = 'Aplicada'
+        
         cur.execute('''
-            INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s)
+            INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo, motivo_nc_nd)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             data['numero_doc'], 
             data['tipo_doc'], 
@@ -1092,11 +1210,14 @@ def api_generar_documento():
             data.get('valor_neto', 0), 
             data.get('iva', 0), 
             data.get('valor_total', 0),
+            estado_doc,
             data.get('forma_pago', 'Contado'), 
-            data.get('proyecto_codigo') or None
+            data.get('proyecto_codigo') or None,
+            data.get('motivo_nc_nd') or None
         ))
         conn.commit()
-        return jsonify({'success': True, 'message': 'Documento generado correctamente'})
+        doc_id = cur.lastrowid
+        return jsonify({'success': True, 'message': 'Documento generado correctamente', 'documento_id': doc_id})
     except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1671,7 +1792,7 @@ def api_ultimos_documentos(tipo):
     cur.execute('''
         SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
                d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo,
-               c.razon_social as cliente_nombre
+               d.motivo_nc_nd, c.razon_social as cliente_nombre
         FROM documentos d
         LEFT JOIN clientes c ON d.cliente_rut=c.rut
         WHERE d.tipo_doc=%s ORDER BY d.id DESC LIMIT 10
