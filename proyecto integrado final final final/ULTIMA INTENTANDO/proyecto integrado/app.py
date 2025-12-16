@@ -1355,7 +1355,7 @@ def api_doc_estado(doc_id):
     data = request.get_json() or {}
     estado = data.get('estado', '')
     
-    if estado not in ['Pendiente', 'Pagado', 'Anulado', 'Aplicada']:
+    if estado not in ['Pendiente', 'Pagado', 'Anulado', 'Aplicada', 'Devuelto']:
         return jsonify({'success': False, 'error': 'Estado inválido'}), 400
     
     conn = get_db()
@@ -1364,6 +1364,105 @@ def api_doc_estado(doc_id):
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+
+@app.route('/api/documentos/<int:doc_id>/devolucion', methods=['POST'])
+@no_consulta
+def api_doc_devolucion(doc_id):
+    """Generar una Nota de Crédito por devolución de un documento"""
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        # Obtener el documento original
+        cur.execute('''
+            SELECT d.*, c.razon_social 
+            FROM documentos d 
+            LEFT JOIN clientes c ON d.cliente_rut = c.rut
+            WHERE d.id = %s
+        ''', (doc_id,))
+        doc_original = cur.fetchone()
+        
+        if not doc_original:
+            return jsonify({'success': False, 'error': 'Documento no encontrado'}), 404
+        
+        if doc_original['tipo_doc'] not in ('FAC', 'BOL'):
+            return jsonify({'success': False, 'error': 'Solo se pueden devolver facturas o boletas'}), 400
+        
+        if doc_original['estado'] == 'Anulado':
+            return jsonify({'success': False, 'error': 'El documento ya está anulado'}), 400
+        
+        # Obtener siguiente número de NC
+        cur.execute("SELECT COALESCE(MAX(numero_doc),0)+1 as num FROM documentos WHERE tipo_doc='NC'")
+        numero_nc = cur.fetchone()['num']
+        
+        # Verificar si existe la columna motivo_nc_nd
+        cur.execute("""
+            SELECT COUNT(*) as existe FROM information_schema.columns 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'documentos' 
+            AND column_name = 'motivo_nc_nd'
+        """)
+        tiene_motivo = cur.fetchone()['existe'] > 0
+        
+        tipo_doc_nombre = 'Factura' if doc_original['tipo_doc'] == 'FAC' else 'Boleta'
+        descripcion = f"Devolución de {tipo_doc_nombre} #{doc_original['numero_doc']}"
+        motivo = "Devolución de mercadería"
+        
+        from datetime import datetime
+        fecha_hoy = datetime.now().strftime('%Y-%m-%d')
+        
+        if tiene_motivo:
+            cur.execute('''
+                INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, 
+                    valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo, motivo_nc_nd)
+                VALUES (%s, 'NC', %s, %s, %s, %s, %s, %s, 'Aplicada', 'Contado', %s, %s)
+            ''', (
+                numero_nc,
+                fecha_hoy,
+                doc_original['cliente_rut'],
+                descripcion,
+                doc_original['valor_neto'],
+                doc_original['iva'],
+                doc_original['valor_total'],
+                doc_original['proyecto_codigo'],
+                motivo
+            ))
+        else:
+            cur.execute('''
+                INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, 
+                    valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo)
+                VALUES (%s, 'NC', %s, %s, %s, %s, %s, %s, 'Aplicada', 'Contado', %s)
+            ''', (
+                numero_nc,
+                fecha_hoy,
+                doc_original['cliente_rut'],
+                descripcion,
+                doc_original['valor_neto'],
+                doc_original['iva'],
+                doc_original['valor_total'],
+                doc_original['proyecto_codigo']
+            ))
+        
+        nc_id = cur.lastrowid
+        
+        # Marcar el documento original como "Devuelto"
+        cur.execute('UPDATE documentos SET estado=%s WHERE id=%s', ('Devuelto', doc_id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Devolución procesada. Se generó Nota de Crédito #{numero_nc}',
+            'nc_id': nc_id,
+            'nc_numero': numero_nc
+        })
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 # ============================================================

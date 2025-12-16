@@ -410,6 +410,12 @@ function cargarUltimasFacturas() {
                     // Solo mostrar botones de acción si no es usuario de consulta
                     let botonesAccion = '';
                     if (!ES_CONSULTA) {
+                        // Solo mostrar botón de devolución si está Pagado
+                        const btnDevolucion = (doc.estado === 'Pagado') ? 
+                            `<button class="btn btn-outline-info" onclick="procesarDevolucion(${doc.id}, '${doc.numero_doc}')" title="Procesar Devolución">
+                                <i class="fas fa-undo"></i>
+                            </button>` : '';
+                        
                         botonesAccion = `
                             <div class="btn-group btn-group-sm">
                                 <button class="btn btn-outline-success" onclick="cambiarEstadoFactura(${doc.id}, 'Pagado')" title="Marcar Pagado">
@@ -421,9 +427,17 @@ function cargarUltimasFacturas() {
                                 <button class="btn btn-outline-danger" onclick="cambiarEstadoFactura(${doc.id}, 'Anulado')" title="Anular">
                                     <i class="fas fa-ban"></i>
                                 </button>
+                                ${btnDevolucion}
                             </div>
                         `;
                     }
+                    
+                    // Clase de estado incluyendo Devuelto
+                    let estadoClass = 'bg-secondary';
+                    if (doc.estado === 'Pagado') estadoClass = 'bg-success';
+                    else if (doc.estado === 'Anulado') estadoClass = 'bg-danger';
+                    else if (doc.estado === 'Pendiente') estadoClass = 'bg-warning text-dark';
+                    else if (doc.estado === 'Devuelto') estadoClass = 'bg-info';
                     
                     html += `
                         <tr>
@@ -459,6 +473,28 @@ function cambiarEstadoFactura(docId, nuevoEstado) {
     .then(response => response.json())
     .then(result => {
         if (result.success) {
+            cargarUltimasFacturas();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error));
+}
+
+// Procesar devolución de factura
+function procesarDevolucion(docId, numeroDoc) {
+    if (!confirm(`¿Desea procesar la devolución de la Factura #${numeroDoc}?\n\nEsto generará automáticamente una Nota de Crédito por el monto total.`)) {
+        return;
+    }
+    
+    fetch(`/api/documentos/${docId}/devolucion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${result.message}`);
             cargarUltimasFacturas();
         } else {
             alert('Error: ' + result.error);

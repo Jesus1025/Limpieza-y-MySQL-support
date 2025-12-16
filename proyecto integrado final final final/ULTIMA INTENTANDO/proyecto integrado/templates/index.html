@@ -208,6 +208,7 @@
                                 <th>Cliente</th>
                                 <th>Total</th>
                                 <th>Estado</th>
+                                {% if session.rol != 'consulta' %}<th>Acción</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -217,8 +218,12 @@
                                     <small>
                                         {% if doc.tipo_doc == 'FAC' %}
                                             <span class="badge bg-primary">FAC</span>
-                                        {% else %}
+                                        {% elif doc.tipo_doc == 'BOL' %}
                                             <span class="badge bg-info">BOL</span>
+                                        {% elif doc.tipo_doc == 'NC' %}
+                                            <span class="badge bg-success">NC</span>
+                                        {% elif doc.tipo_doc == 'ND' %}
+                                            <span class="badge bg-warning">ND</span>
                                         {% endif %}
                                         {{ doc.numero_doc }}
                                     </small>
@@ -228,10 +233,25 @@
                                 <td>
                                     {% if doc.estado == 'Pagado' %}
                                         <span class="badge bg-success">Pagado</span>
+                                    {% elif doc.estado == 'Anulado' %}
+                                        <span class="badge bg-danger">Anulado</span>
+                                    {% elif doc.estado == 'Devuelto' %}
+                                        <span class="badge bg-info">Devuelto</span>
+                                    {% elif doc.estado == 'Aplicada' %}
+                                        <span class="badge bg-success">Aplicada</span>
                                     {% else %}
                                         <span class="badge bg-warning">Pendiente</span>
                                     {% endif %}
                                 </td>
+                                {% if session.rol != 'consulta' %}
+                                <td>
+                                    {% if doc.estado == 'Pagado' and doc.tipo_doc in ['FAC', 'BOL'] %}
+                                    <button class="btn btn-sm btn-outline-info" onclick="procesarDevolucionDashboard({{ doc.id }}, '{{ doc.numero_doc }}', '{{ doc.tipo_doc }}')" title="Devolver">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -429,6 +449,29 @@ document.getElementById('btnConfirmarPago').addEventListener('click', function()
         alert('Error: ' + error);
     });
 });
+
+// Procesar devolución desde el dashboard
+function procesarDevolucionDashboard(docId, numeroDoc, tipoDoc) {
+    const tipoNombre = tipoDoc === 'FAC' ? 'Factura' : 'Boleta';
+    if (!confirm(`¿Desea procesar la devolución de la ${tipoNombre} #${numeroDoc}?\n\nEsto generará automáticamente una Nota de Crédito por el monto total.`)) {
+        return;
+    }
+    
+    fetch(`/api/documentos/${docId}/devolucion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${result.message}`);
+            location.reload(); // Recargar para ver los cambios
+        } else {
+            alert('Error: ' + result.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error));
+}
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', function() {
