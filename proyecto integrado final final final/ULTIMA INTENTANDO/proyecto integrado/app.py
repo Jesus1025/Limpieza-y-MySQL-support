@@ -5,11 +5,10 @@
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, send_file, Response
 import os
-import re
 import io
 import csv
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # MySQL - REQUERIDO para PythonAnywhere
@@ -100,32 +99,32 @@ def validate_rut(rut: str) -> bool:
 
 
 def validate_email(email: str) -> bool:
-    """Valida formato de email"""
+    """Valida formato de email - MUY permisivo"""
     if not email:
         return False
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email.strip(), re.IGNORECASE))
+    email = email.strip()
+    # Solo verificar que tenga @ y un punto después
+    if '@' not in email:
+        return False
+    parts = email.split('@')
+    if len(parts) != 2:
+        return False
+    if '.' not in parts[1]:
+        return False
+    return True
 
 
 def validate_telefono_chileno(telefono: str) -> bool:
-    """Valida teléfono chileno (opcional)"""
-    if not telefono:
-        return True
-    telefono = telefono.strip().replace(' ', '').replace('-', '')
-    pattern = r'^(\+?56)?9[0-9]{8}$'
-    return bool(re.match(pattern, telefono))
+    """Valida teléfono - MUY permisivo, acepta cualquier formato"""
+    # Siempre retorna True - el teléfono es opcional y puede tener cualquier formato
+    return True
 
 
 def format_telefono_chileno(telefono: str) -> str:
-    """Formatea teléfono chileno"""
+    """Retorna teléfono sin cambios - solo limpia espacios extra"""
     if not telefono:
         return ''
-    telefono = telefono.strip().replace(' ', '').replace('-', '').replace('+', '')
-    if telefono.startswith('56'):
-        telefono = telefono[2:]
-    if len(telefono) == 9 and telefono.startswith('9'):
-        return f"+56 {telefono[0]} {telefono[1:5]} {telefono[5:]}"
-    return telefono
+    return telefono.strip()
 
 
 # ============================================================
@@ -141,6 +140,51 @@ def login_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+
+# ============================================================
+# RUTA DE PRUEBA DE CONEXIÓN
+# ============================================================
+
+@app.route('/api/test-db')
+def test_db():
+    """Ruta para probar la conexión a MySQL"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 as test")
+        result = cursor.fetchone()
+        
+        # Verificar tablas
+        cursor.execute("SHOW TABLES")
+        tables = [t[list(t.keys())[0]] if isinstance(t, dict) else t[0] for t in cursor.fetchall()]
+        
+        # Contar clientes
+        cursor.execute("SELECT COUNT(*) as total FROM clientes")
+        total_clientes = cursor.fetchone()['total']
+        
+        conn.close()
+        return jsonify({
+            'success': True,
+            'message': 'Conexión exitosa a MySQL',
+            'tables': tables,
+            'total_clientes': total_clientes,
+            'config': {
+                'host': MYSQL_CONFIG['host'],
+                'user': MYSQL_CONFIG['user'],
+                'database': MYSQL_CONFIG['database']
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'config': {
+                'host': MYSQL_CONFIG['host'],
+                'user': MYSQL_CONFIG['user'],
+                'database': MYSQL_CONFIG['database']
+            }
+        }), 500
 
 
 def role_required(required_roles):
@@ -474,19 +518,19 @@ def api_clientes():
         razon_social = (data.get('razon_social') or '').strip()
         email = (data.get('email') or '').strip()
 
-        # Validaciones
+        # Validaciones - solo RUT y razón social son obligatorios
         if not rut or not razon_social:
             return jsonify({'success': False, 'error': 'RUT y razón social son obligatorios'}), 400
 
         if not validate_rut(rut):
             return jsonify({'success': False, 'error': 'RUT inválido. Verifique el dígito verificador'}), 400
 
-        if not email or not validate_email(email):
-            return jsonify({'success': False, 'error': 'Debe ingresar un correo electrónico válido'}), 400
+        # Email es opcional, pero si se ingresa debe ser válido
+        if email and not validate_email(email):
+            return jsonify({'success': False, 'error': 'Formato de correo electrónico inválido'}), 400
 
         telefono = (data.get('telefono') or '').strip()
-        if telefono and not validate_telefono_chileno(telefono):
-            return jsonify({'success': False, 'error': 'Formato de teléfono inválido. Use: +56 9 XXXX XXXX'}), 400
+        # Teléfono siempre es válido (validación permisiva)
 
         # Normalizar datos
         rut_norm = normalize_rut(rut)
