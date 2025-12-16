@@ -1013,7 +1013,7 @@ def api_doc_estado(doc_id):
     data = request.get_json() or {}
     estado = data.get('estado', '')
     
-    if estado not in ['Pendiente', 'Pagado', 'Anulado']:
+    if estado not in ['Pendiente', 'Pagado', 'Anulado', 'Aplicada']:
         return jsonify({'success': False, 'error': 'Estado inválido'}), 400
     
     conn = get_db()

@@ -406,8 +406,11 @@ function cargarUltimasFacturas() {
                             <td><span class="badge ${estadoClass}">${doc.estado}</span></td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-success" onclick="cambiarEstadoFactura(${doc.id}, 'Pagado')" title="Pagado">
+                                    <button class="btn btn-outline-success" onclick="cambiarEstadoFactura(${doc.id}, 'Pagado')" title="Marcar Pagado">
                                         <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="cambiarEstadoFactura(${doc.id}, 'Pendiente')" title="Marcar Pendiente">
+                                        <i class="fas fa-clock"></i>
                                     </button>
                                     <button class="btn btn-outline-danger" onclick="cambiarEstadoFactura(${doc.id}, 'Anulado')" title="Anular">
                                         <i class="fas fa-ban"></i>
