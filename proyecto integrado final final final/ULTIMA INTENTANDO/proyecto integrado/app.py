@@ -1246,23 +1246,75 @@ def api_generar_documento():
         if data['tipo_doc'] in ('NC', 'ND') and not data.get('estado'):
             estado_doc = 'Aplicada'
         
-        cur.execute('''
-            INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo, motivo_nc_nd)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (
-            data['numero_doc'], 
-            data['tipo_doc'], 
-            data.get('fecha_emision') or datetime.now().strftime('%Y-%m-%d'),
-            data['cliente_rut'], 
-            data.get('descripcion', ''),
-            data.get('valor_neto', 0), 
-            data.get('iva', 0), 
-            data.get('valor_total', 0),
-            estado_doc,
-            data.get('forma_pago', 'Contado'), 
-            data.get('proyecto_codigo') or None,
-            data.get('motivo_nc_nd') or None
-        ))
+        # Verificar si existe la columna motivo_nc_nd
+        cur.execute("""
+            SELECT COUNT(*) as existe FROM information_schema.columns 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'documentos' 
+            AND column_name = 'motivo_nc_nd'
+        """)
+        tiene_motivo = cur.fetchone()['existe'] > 0
+        
+        if tiene_motivo:
+            cur.execute('''
+                INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo, motivo_nc_nd)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                data['numero_doc'], 
+                data['tipo_doc'], 
+                data.get('fecha_emision') or datetime.now().strftime('%Y-%m-%d'),
+                data['cliente_rut'], 
+                data.get('descripcion', ''),
+                data.get('valor_neto', 0), 
+                data.get('iva', 0), 
+                data.get('valor_total', 0),
+                estado_doc,
+                data.get('forma_pago', 'Contado'), 
+                data.get('proyecto_codigo') or None,
+                data.get('motivo_nc_nd') or None
+            ))
+        else:
+            # Agregar la columna si no existe
+            try:
+                cur.execute("ALTER TABLE documentos ADD COLUMN motivo_nc_nd VARCHAR(255)")
+                conn.commit()
+                # Ahora insertar con la columna
+                cur.execute('''
+                    INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo, motivo_nc_nd)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    data['numero_doc'], 
+                    data['tipo_doc'], 
+                    data.get('fecha_emision') or datetime.now().strftime('%Y-%m-%d'),
+                    data['cliente_rut'], 
+                    data.get('descripcion', ''),
+                    data.get('valor_neto', 0), 
+                    data.get('iva', 0), 
+                    data.get('valor_total', 0),
+                    estado_doc,
+                    data.get('forma_pago', 'Contado'), 
+                    data.get('proyecto_codigo') or None,
+                    data.get('motivo_nc_nd') or None
+                ))
+            except:
+                # Si falla el ALTER, insertar sin motivo
+                cur.execute('''
+                    INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago, proyecto_codigo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    data['numero_doc'], 
+                    data['tipo_doc'], 
+                    data.get('fecha_emision') or datetime.now().strftime('%Y-%m-%d'),
+                    data['cliente_rut'], 
+                    data.get('descripcion', ''),
+                    data.get('valor_neto', 0), 
+                    data.get('iva', 0), 
+                    data.get('valor_total', 0),
+                    estado_doc,
+                    data.get('forma_pago', 'Contado'), 
+                    data.get('proyecto_codigo') or None
+                ))
+        
         conn.commit()
         doc_id = cur.lastrowid
         return jsonify({'success': True, 'message': 'Documento generado correctamente', 'documento_id': doc_id})
@@ -1837,14 +1889,35 @@ def exportar_clientes_cuenta(cuenta):
 def api_ultimos_documentos(tipo):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('''
-        SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
-               d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo,
-               d.motivo_nc_nd, c.razon_social as cliente_nombre
-        FROM documentos d
-        LEFT JOIN clientes c ON d.cliente_rut=c.rut
-        WHERE d.tipo_doc=%s ORDER BY d.id DESC LIMIT 10
-    ''', (tipo,))
+    
+    # Verificar si existe la columna motivo_nc_nd
+    cur.execute("""
+        SELECT COUNT(*) as existe FROM information_schema.columns 
+        WHERE table_schema = DATABASE() 
+        AND table_name = 'documentos' 
+        AND column_name = 'motivo_nc_nd'
+    """)
+    tiene_motivo = cur.fetchone()['existe'] > 0
+    
+    if tiene_motivo:
+        cur.execute('''
+            SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
+                   d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo,
+                   d.motivo_nc_nd, c.razon_social as cliente_nombre
+            FROM documentos d
+            LEFT JOIN clientes c ON d.cliente_rut=c.rut
+            WHERE d.tipo_doc=%s ORDER BY d.id DESC LIMIT 10
+        ''', (tipo,))
+    else:
+        cur.execute('''
+            SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.cliente_rut,
+                   d.valor_neto, d.iva, d.valor_total, d.estado, d.proyecto_codigo,
+                   NULL as motivo_nc_nd, c.razon_social as cliente_nombre
+            FROM documentos d
+            LEFT JOIN clientes c ON d.cliente_rut=c.rut
+            WHERE d.tipo_doc=%s ORDER BY d.id DESC LIMIT 10
+        ''', (tipo,))
+    
     docs = cur.fetchall()
     conn.close()
     
