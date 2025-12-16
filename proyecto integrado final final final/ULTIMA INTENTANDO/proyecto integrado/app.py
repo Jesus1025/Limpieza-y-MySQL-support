@@ -1225,11 +1225,11 @@ def api_top_clientes():
 @app.route('/api/cuentas-corrientes')
 @login_required
 def api_cuentas_corrientes():
-    """Obtener lista de cuentas corrientes (bancos) únicos"""
+    """Obtener lista de números de cuenta corriente únicos"""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT DISTINCT banco FROM clientes WHERE banco IS NOT NULL AND banco != "" AND activo=1 ORDER BY banco')
-    cuentas = [row['banco'] for row in cur.fetchall()]
+    cur.execute('SELECT DISTINCT cuenta_corriente FROM clientes WHERE cuenta_corriente IS NOT NULL AND cuenta_corriente != "" AND activo=1 ORDER BY cuenta_corriente')
+    cuentas = [row['cuenta_corriente'] for row in cur.fetchall()]
     conn.close()
     return jsonify(cuentas)
 
@@ -1237,10 +1237,10 @@ def api_cuentas_corrientes():
 @app.route('/api/clientes-por-cuenta/<cuenta>')
 @login_required
 def api_clientes_por_cuenta(cuenta):
-    """Obtener clientes filtrados por cuenta corriente/banco"""
+    """Obtener clientes filtrados por número de cuenta corriente"""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    cur.execute('SELECT * FROM clientes WHERE cuenta_corriente=%s AND activo=1', (cuenta,))
     clientes = cur.fetchall()
     conn.close()
     return jsonify(clientes)
@@ -1249,12 +1249,12 @@ def api_clientes_por_cuenta(cuenta):
 @app.route('/api/cuenta-corriente-detalle/<cuenta>')
 @login_required
 def api_cuenta_corriente_detalle(cuenta):
-    """Obtener detalle completo de una cuenta corriente"""
+    """Obtener detalle completo de una cuenta corriente por número"""
     conn = get_db()
     cur = conn.cursor()
     
     # Obtener clientes con esta cuenta
-    cur.execute('SELECT rut, razon_social FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    cur.execute('SELECT rut, razon_social, banco FROM clientes WHERE cuenta_corriente=%s AND activo=1', (cuenta,))
     clientes = cur.fetchall()
     
     if not clientes:
@@ -1304,12 +1304,12 @@ def api_cuenta_corriente_detalle(cuenta):
 @app.route('/api/exportar-cuenta-corriente-csv/<cuenta>')
 @login_required
 def exportar_cuenta_corriente_csv(cuenta):
-    """Exportar clientes y documentos de una cuenta corriente"""
+    """Exportar clientes y documentos de una cuenta corriente por número"""
     conn = get_db()
     cur = conn.cursor()
     
     # Obtener clientes con esta cuenta
-    cur.execute('SELECT rut, razon_social FROM clientes WHERE banco=%s AND activo=1', (cuenta,))
+    cur.execute('SELECT rut, razon_social FROM clientes WHERE cuenta_corriente=%s AND activo=1', (cuenta,))
     clientes = cur.fetchall()
     
     if not clientes:
