@@ -412,12 +412,12 @@ function verDocumentosProyecto(codigo, nombre) {
         .then(data => {
             // Actualizar resumen
             document.getElementById('resumenPresupuesto').textContent = formatMoney(data.proyecto.presupuesto);
-            document.getElementById('resumenFacturado').textContent = formatMoney(data.progreso.total_facturado);
-            document.getElementById('resumenPagado').textContent = formatMoney(data.progreso.total_pagado);
-            document.getElementById('resumenPendiente').textContent = formatMoney(data.progreso.total_pendiente);
+            document.getElementById('resumenFacturado').textContent = formatMoney(data.financiero.facturado);
+            document.getElementById('resumenPagado').textContent = formatMoney(data.financiero.cobrado);
+            document.getElementById('resumenPendiente').textContent = formatMoney(data.financiero.pendiente);
             
             // Actualizar barra de progreso
-            const porcentaje = data.progreso.porcentaje_pagado;
+            const porcentaje = Math.round(data.financiero.progreso || 0);
             document.getElementById('barraProgresoModal').style.width = `${porcentaje}%`;
             document.getElementById('textoProgresoModal').textContent = `${porcentaje}% pagado`;
             
@@ -426,15 +426,15 @@ function verDocumentosProyecto(codigo, nombre) {
             if (data.documentos && data.documentos.length > 0) {
                 let html = '';
                 data.documentos.forEach(doc => {
-                    const tipoLabel = doc.tipo_doc === 'FAC' ? 'Factura' : doc.tipo_doc === 'BOL' ? 'Boleta' : doc.tipo_doc;
-                    const estadoClass = doc.estado === 'Pagado' ? 'bg-success' : doc.estado === 'Anulado' ? 'bg-danger' : 'bg-warning';
+                    const tipoLabel = doc.tipo_doc === 'FAC' ? 'Factura' : doc.tipo_doc === 'BOL' ? 'Boleta' : doc.tipo_doc === 'NC' ? 'N. Crédito' : doc.tipo_doc === 'ND' ? 'N. Débito' : doc.tipo_doc;
+                    const estadoClass = doc.estado === 'Pagado' ? 'bg-success' : doc.estado === 'Anulado' ? 'bg-danger' : doc.estado === 'Aplicada' ? 'bg-info' : 'bg-warning';
                     
                     html += `
                         <tr>
                             <td><strong>${doc.numero_doc}</strong></td>
                             <td><span class="badge bg-secondary">${tipoLabel}</span></td>
                             <td>${doc.fecha_emision}</td>
-                            <td>${doc.cliente_nombre || 'N/A'}</td>
+                            <td>${doc.razon_social || 'N/A'}</td>
                             <td><strong>${formatMoney(doc.valor_total)}</strong></td>
                             <td><span class="badge ${estadoClass}">${doc.estado}</span></td>
                             <td>

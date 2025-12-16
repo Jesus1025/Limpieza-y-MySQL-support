@@ -138,6 +138,32 @@ def test_documentos():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/test-proyecto-docs/<codigo>')
+def test_proyecto_docs(codigo):
+    """Ver documentos de un proyecto específico para debug"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        # Ver todos los documentos con proyecto_codigo
+        cur.execute("SELECT id, numero_doc, tipo_doc, proyecto_codigo FROM documentos WHERE proyecto_codigo IS NOT NULL")
+        docs_con_proyecto = cur.fetchall()
+        
+        # Ver documentos del proyecto específico
+        cur.execute("SELECT id, numero_doc, tipo_doc, proyecto_codigo FROM documentos WHERE proyecto_codigo = %s", (codigo,))
+        docs_del_proyecto = cur.fetchall()
+        
+        conn.close()
+        
+        return jsonify({
+            'codigo_buscado': codigo,
+            'docs_con_cualquier_proyecto': docs_con_proyecto,
+            'docs_del_proyecto_especifico': docs_del_proyecto
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/test-insert')
 def test_insert():
     """Insertar cliente de prueba directamente"""
@@ -1145,13 +1171,13 @@ def api_proyecto_progreso(codigo):
         conn.close()
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     
-    # Documentos del proyecto
+    # Documentos del proyecto - usar LIKE para asegurar match
     cur.execute('''
         SELECT d.id, d.numero_doc, d.tipo_doc, d.fecha_emision, d.valor_total, 
-               d.estado, c.razon_social
+               d.estado, c.razon_social, d.proyecto_codigo
         FROM documentos d
         LEFT JOIN clientes c ON d.cliente_rut=c.rut
-        WHERE d.proyecto_codigo=%s
+        WHERE d.proyecto_codigo = %s
         ORDER BY d.fecha_emision DESC
     ''', (codigo,))
     documentos = cur.fetchall()
