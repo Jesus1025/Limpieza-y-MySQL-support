@@ -661,8 +661,11 @@ function cargarDeudas() {
                                     <button class="btn btn-success" onclick="cambiarEstadoDocumento(${doc.id}, 'Pagado')" title="Marcar como Pagado">
                                         <i class="fas fa-check"></i>
                                     </button>
+                                    <button class="btn btn-warning" onclick="cambiarEstadoDocumento(${doc.id}, 'Pendiente')" title="Dejar Pendiente">
+                                        <i class="fas fa-clock"></i>
+                                    </button>
                                     <button class="btn btn-danger" onclick="cambiarEstadoDocumento(${doc.id}, 'Anulado')" title="Anular documento">
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-ban"></i>
                                     </button>
                                 </div>
                             </td>
