@@ -95,6 +95,19 @@
                                             title="Editar">
                                             <i class="fas fa-edit"></i>
                                         </button>
+                                        {% if proyecto.estado == 'Activo' %}
+                                        <button class="btn btn-sm btn-outline-secondary btn-toggle-estado-proyecto"
+                                            data-codigo="{{ proyecto.codigo }}"
+                                            title="Desactivar proyecto">
+                                            <i class="fas fa-toggle-on"></i>
+                                        </button>
+                                        {% else %}
+                                        <button class="btn btn-sm btn-outline-success btn-toggle-estado-proyecto"
+                                            data-codigo="{{ proyecto.codigo }}"
+                                            title="Activar proyecto">
+                                            <i class="fas fa-toggle-off"></i>
+                                        </button>
+                                        {% endif %}
                                         <button class="btn btn-sm btn-outline-danger btn-eliminar-proyecto"
                                             data-codigo="{{ proyecto.codigo }}"
                                             data-nombre="{{ proyecto.nombre }}"
@@ -581,7 +594,35 @@ document.addEventListener('DOMContentLoaded', function() {
             verDocumentosProyecto(this.dataset.codigo, this.dataset.nombre);
         });
     });
+    
+    // Botones de toggle estado (activar/desactivar)
+    document.querySelectorAll('.btn-toggle-estado-proyecto').forEach(btn => {
+        btn.addEventListener('click', function() {
+            toggleEstadoProyecto(this.dataset.codigo);
+        });
+    });
 });
+
+// Toggle estado de proyecto (activo/inactivo)
+function toggleEstadoProyecto(codigo) {
+    if (!confirm('¿Desea cambiar el estado de este proyecto?')) return;
+    
+    fetch('/api/proyectos/' + encodeURIComponent(codigo) + '/toggle-estado', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const estado = data.estado === 'Activo' ? 'activado' : 'desactivado';
+            alert('Proyecto ' + estado + ' correctamente');
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Error al cambiar estado'));
+        }
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
 
 // Resetear modal cuando se cierra
 document.getElementById('modalProyecto').addEventListener('hidden.bs.modal', function () {

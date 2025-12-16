@@ -308,7 +308,8 @@ function generarBoletaRapida() {
 function cargarDocumentosPendientes() {
     fetch('/api/documentos-pendientes')
         .then(response => response.json())
-        .then(documentos => {
+        .then(data => {
+            const documentos = data.documentos || [];
             const container = document.getElementById('listaPendientes');
             const contador = document.getElementById('contadorPendientes');
             
@@ -363,7 +364,8 @@ function prepararPago(documentoId) {
     // Buscar información del documento
     fetch('/api/documentos-pendientes')
         .then(response => response.json())
-        .then(documentos => {
+        .then(data => {
+            const documentos = data.documentos || [];
             const doc = documentos.find(d => d.id === documentoId);
             if (doc) {
                 const fecha = new Date(doc.fecha_emision).toLocaleDateString('es-CL');

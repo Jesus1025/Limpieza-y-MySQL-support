@@ -828,6 +828,32 @@ def api_clientes():
         conn.close()
 
 
+@app.route('/api/clientes/<rut>/toggle-activo', methods=['PUT'])
+@app.route('/api/clientes-dev/<rut>/toggle-activo', methods=['PUT'])
+@login_required
+def api_cliente_toggle_activo(rut):
+    conn = get_db()
+    cur = conn.cursor()
+    rut_n = normalize_rut(rut)
+    
+    try:
+        # Obtener estado actual
+        cur.execute("SELECT activo FROM clientes WHERE rut=%s", (rut_n,))
+        cliente = cur.fetchone()
+        if not cliente:
+            return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 404
+        
+        nuevo_estado = 0 if cliente['activo'] == 1 else 1
+        cur.execute("UPDATE clientes SET activo=%s WHERE rut=%s", (nuevo_estado, rut_n))
+        conn.commit()
+        
+        return jsonify({'success': True, 'activo': nuevo_estado})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @app.route('/api/clientes/<rut>', methods=['GET', 'PUT'])
 @app.route('/api/clientes-dev/<rut>', methods=['GET', 'PUT'])
 def api_cliente_detalle(rut):
@@ -922,6 +948,30 @@ def api_proyectos():
     
     except Exception as e:
         conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/proyectos/<codigo>/toggle-estado', methods=['PUT'])
+@login_required
+def api_proyecto_toggle_estado(codigo):
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("SELECT estado FROM proyectos WHERE codigo=%s", (codigo,))
+        proyecto = cur.fetchone()
+        if not proyecto:
+            return jsonify({'success': False, 'error': 'Proyecto no encontrado'}), 404
+        
+        # Cambiar entre Activo e Inactivo
+        nuevo_estado = 'Inactivo' if proyecto['estado'] == 'Activo' else 'Activo'
+        cur.execute("UPDATE proyectos SET estado=%s WHERE codigo=%s", (nuevo_estado, codigo))
+        conn.commit()
+        
+        return jsonify({'success': True, 'estado': nuevo_estado})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         conn.close()
