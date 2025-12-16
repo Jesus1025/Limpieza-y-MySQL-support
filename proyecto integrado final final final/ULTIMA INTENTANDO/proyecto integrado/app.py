@@ -103,6 +103,40 @@ def login_required(f):
     return decorated
 
 
+def admin_required(f):
+    """Solo permite acceso a usuarios con rol 'admin'"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'No autorizado'}), 401
+            return redirect(url_for('login'))
+        if session.get('rol') != 'admin':
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Acceso denegado. Se requiere rol de administrador'}), 403
+            flash('No tienes permisos para acceder a esta sección', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def no_consulta(f):
+    """Permite acceso a admin y usuario, pero NO a consulta"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'No autorizado'}), 401
+            return redirect(url_for('login'))
+        if session.get('rol') == 'consulta':
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Acceso denegado. Usuario de solo consulta'}), 403
+            flash('No tienes permisos para realizar esta acción', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated
+
+
 # ============================================================
 # RUTAS DE PRUEBA
 # ============================================================
@@ -554,7 +588,7 @@ def administracion():
 
 @app.route('/api/usuarios', methods=['GET', 'POST'])
 @app.route('/api/usuarios-dev', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def api_usuarios():
     conn = get_db()
     cur = conn.cursor()
@@ -603,7 +637,7 @@ def api_usuarios():
 
 @app.route('/api/usuarios/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
 @app.route('/api/usuarios-dev/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
-@login_required
+@admin_required
 def api_usuario_detalle(user_id):
     conn = get_db()
     cur = conn.cursor()
@@ -727,7 +761,12 @@ def cambiar_password():
 
 @app.route('/api/clientes', methods=['GET', 'POST', 'DELETE'])
 @app.route('/api/clientes-dev', methods=['GET', 'POST', 'DELETE'])
+@login_required
 def api_clientes():
+    # Verificar permisos para operaciones de escritura
+    if request.method in ['POST', 'DELETE'] and session.get('rol') == 'consulta':
+        return jsonify({'error': 'Acceso denegado. Usuario de solo consulta'}), 403
+    
     conn = get_db()
     cur = conn.cursor()
     
@@ -830,7 +869,7 @@ def api_clientes():
 
 @app.route('/api/clientes/<rut>/toggle-activo', methods=['PUT'])
 @app.route('/api/clientes-dev/<rut>/toggle-activo', methods=['PUT'])
-@login_required
+@no_consulta
 def api_cliente_toggle_activo(rut):
     conn = get_db()
     cur = conn.cursor()
@@ -902,7 +941,12 @@ def api_cliente_detalle(rut):
 # ============================================================
 
 @app.route('/api/proyectos', methods=['GET', 'POST'])
+@login_required
 def api_proyectos():
+    # Verificar permisos para operaciones de escritura
+    if request.method == 'POST' and session.get('rol') == 'consulta':
+        return jsonify({'error': 'Acceso denegado. Usuario de solo consulta'}), 403
+    
     conn = get_db()
     cur = conn.cursor()
     
@@ -954,7 +998,7 @@ def api_proyectos():
 
 
 @app.route('/api/proyectos/<codigo>/toggle-estado', methods=['PUT'])
-@login_required
+@no_consulta
 def api_proyecto_toggle_estado(codigo):
     conn = get_db()
     cur = conn.cursor()
@@ -978,6 +1022,7 @@ def api_proyecto_toggle_estado(codigo):
 
 
 @app.route('/api/proyectos/<codigo>', methods=['PUT', 'DELETE'])
+@no_consulta
 def api_proyecto_detalle(codigo):
     conn = get_db()
     cur = conn.cursor()
@@ -1013,7 +1058,7 @@ def api_proyecto_detalle(codigo):
 # ============================================================
 
 @app.route('/api/generar-documento', methods=['POST'])
-@login_required
+@no_consulta
 def api_generar_documento():
     conn = get_db()
     cur = conn.cursor()
@@ -1084,7 +1129,7 @@ def api_docs_pendientes():
 
 
 @app.route('/api/documentos/<int:doc_id>/estado', methods=['PUT'])
-@login_required
+@no_consulta
 def api_doc_estado(doc_id):
     data = request.get_json() or {}
     estado = data.get('estado', '')
@@ -1643,7 +1688,7 @@ def api_ultimos_documentos(tipo):
 
 
 @app.route('/api/generar-boleta-rapida', methods=['POST'])
-@login_required
+@no_consulta
 def api_boleta_rapida():
     conn = get_db()
     cur = conn.cursor()

@@ -11,9 +11,11 @@
                 <a href="/api/exportar-proyectos-csv" class="btn btn-success me-2">
                     <i class="fas fa-file-csv"></i> Exportar CSV
                 </a>
+                {% if session.rol != 'consulta' %}
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalProyecto">
                     <i class="fas fa-plus"></i> Nuevo Proyecto
                 </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -92,6 +94,7 @@
                                             title="Ver documentos">
                                             <i class="fas fa-file-invoice"></i>
                                         </button>
+                                        {% if session.rol != 'consulta' %}
                                         <button class="btn btn-sm btn-outline-primary btn-editar-proyecto"
                                             data-codigo="{{ proyecto.codigo }}"
                                             data-nombre="{{ proyecto.nombre }}"
@@ -123,6 +126,7 @@
                                             title="Eliminar">
                                             <i class="fas fa-trash"></i>
                                         </button>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

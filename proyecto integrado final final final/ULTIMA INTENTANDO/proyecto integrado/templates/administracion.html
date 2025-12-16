@@ -7,13 +7,18 @@
     <div class="row mb-4">
         <div class="col-md-8">
             <h1 class="h3 mb-0"><i class="fas fa-cog"></i> Administración</h1>
+            {% if session.rol == 'admin' %}
             <p class="text-muted mt-1">Gestiona tu cuenta y perfiles de usuario</p>
+            {% else %}
+            <p class="text-muted mt-1">Consulta el manual de usuario</p>
+            {% endif %}
         </div>
     </div>
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
             <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+                {% if session.rol == 'admin' %}
                 <li class="nav-item">
                     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cambiar-password">
                         <i class="fas fa-lock"></i> Cambiar Contraseña
@@ -29,10 +34,19 @@
                         <i class="fas fa-book"></i> Manual de Usuario
                     </button>
                 </li>
+                {% else %}
+                <!-- Usuarios no admin solo ven el manual -->
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#manual-usuario">
+                        <i class="fas fa-book"></i> Manual de Usuario
+                    </button>
+                </li>
+                {% endif %}
             </ul>
 
             <div class="tab-content" id="adminTabContent">
-                <!-- TAB: CAMBIAR CONTRASEÑA -->
+                {% if session.rol == 'admin' %}
+                <!-- TAB: CAMBIAR CONTRASEÑA (Solo Admin) -->
                 <div class="tab-pane fade show active" id="cambiar-password">
                     <div class="row mt-4">
                         <div class="col-md-6">
@@ -59,7 +73,7 @@
                     </div>
                 </div>
 
-                <!-- TAB: GESTIONAR PERFILES -->
+                <!-- TAB: GESTIONAR PERFILES (Solo Admin) -->
                 <div class="tab-pane fade" id="perfiles">
                     <div class="mt-4">
                         <div class="row mb-3">
@@ -93,8 +107,12 @@
                     </div>
                 </div>
 
-                <!-- TAB: MANUAL DE USUARIO -->
+                <!-- TAB: MANUAL DE USUARIO (Para admin es tercera tab) -->
                 <div class="tab-pane fade" id="manual-usuario">
+                {% else %}
+                <!-- TAB: MANUAL DE USUARIO (Para otros usuarios es la única tab y está activa) -->
+                <div class="tab-pane fade show active" id="manual-usuario">
+                {% endif %}
                     <div class="mt-4">
                         <div class="row mb-4">
                             <div class="col-md-8">
@@ -137,7 +155,8 @@
     </div>
 </div>
 
-<!-- Modal: Nuevo/Editar Perfil -->
+{% if session.rol == 'admin' %}
+<!-- Modal: Nuevo/Editar Perfil (Solo visible para admin) -->
 <div class="modal fade" id="modalNuevoPerfil" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -188,10 +207,12 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+{% if session.rol == 'admin' %}
 let perfilesActuales = [];
 let perfilEditando = null;
 
@@ -353,5 +374,6 @@ function cambiarPassword() {
     })
     .catch(e => alert('Error: ' + e.message));
 }
+{% endif %}
 </script>
 {% endblock %}

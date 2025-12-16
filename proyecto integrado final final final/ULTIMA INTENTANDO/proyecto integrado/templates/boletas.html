@@ -5,10 +5,11 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4"><i class="fas fa-receipt"></i> Generar Boleta</h1>
+        <h1 class="mb-4"><i class="fas fa-receipt"></i> {% if session.rol == 'consulta' %}Consultar Boletas{% else %}Generar Boleta{% endif %}</h1>
     </div>
 </div>
 
+{% if session.rol != 'consulta' %}
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -150,6 +151,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Tabla de Últimas Boletas -->
 <div class="row mt-4">
@@ -194,7 +196,10 @@
 <script>
 const IVA = 0.19;
 let items = [];
+const ROL_USUARIO = '{{ session.rol }}';
+const ES_CONSULTA = ROL_USUARIO === 'consulta';
 
+{% if session.rol != 'consulta' %}
 // Establecer fecha actual por defecto
 document.getElementById('fecha_emision').value = new Date().toISOString().split('T')[0];
 
@@ -360,6 +365,12 @@ document.addEventListener('DOMContentLoaded', function() {
     calcularTotales();
     cargarUltimasBoletas();
 });
+{% else %}
+// Usuario de solo consulta
+document.addEventListener('DOMContentLoaded', function() {
+    cargarUltimasBoletas();
+});
+{% endif %}
 
 // Formatear moneda
 function formatMoney(amount) {
@@ -391,6 +402,24 @@ function cargarUltimasBoletas() {
                     else if (doc.estado === 'Anulado') estadoClass = 'bg-danger';
                     else if (doc.estado === 'Pendiente') estadoClass = 'bg-warning';
                     
+                    // Solo mostrar botones si no es usuario de consulta
+                    let botonesAccion = '';
+                    if (!ES_CONSULTA) {
+                        botonesAccion = `
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-success" onclick="cambiarEstadoBoleta(${doc.id}, 'Pagado')" title="Marcar Pagado">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-outline-warning" onclick="cambiarEstadoBoleta(${doc.id}, 'Pendiente')" title="Marcar Pendiente">
+                                    <i class="fas fa-clock"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="cambiarEstadoBoleta(${doc.id}, 'Anulado')" title="Anular">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            </div>
+                        `;
+                    }
+                    
                     html += `
                         <tr>
                             <td><strong>${doc.numero_doc}</strong></td>
@@ -399,19 +428,7 @@ function cargarUltimasBoletas() {
                             <td>${doc.proyecto_codigo || '-'}</td>
                             <td><strong>${formatMoney(doc.valor_total)}</strong></td>
                             <td><span class="badge ${estadoClass}">${doc.estado}</span></td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-success" onclick="cambiarEstadoBoleta(${doc.id}, 'Pagado')" title="Marcar Pagado">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-outline-warning" onclick="cambiarEstadoBoleta(${doc.id}, 'Pendiente')" title="Marcar Pendiente">
-                                        <i class="fas fa-clock"></i>
-                                    </button>
-                                    <button class="btn btn-outline-danger" onclick="cambiarEstadoBoleta(${doc.id}, 'Anulado')" title="Anular">
-                                        <i class="fas fa-ban"></i>
-                                    </button>
-                                </div>
-                            </td>
+                            <td>${botonesAccion}</td>
                         </tr>
                     `;
                 });

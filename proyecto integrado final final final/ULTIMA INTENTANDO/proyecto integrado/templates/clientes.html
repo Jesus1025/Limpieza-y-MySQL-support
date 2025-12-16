@@ -13,9 +13,11 @@
             <p class="text-muted mt-1 mb-0">Mostrando <strong id="clientesCount">{{ clientes|length }}</strong> clientes</p>
         </div>
         <div class="col-md-4 text-end">
+            {% if session.rol != 'consulta' %}
             <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#modalClienteNuevo">
                 <i class="fas fa-plus-circle"></i> Nuevo Cliente
             </button>
+            {% endif %}
         </div>
     </div>
 
@@ -202,6 +204,10 @@
 
 {% block scripts %}
 <script>
+// Variable global con el rol del usuario para controlar visibilidad de botones
+const ROL_USUARIO = '{{ session.rol }}';
+const ES_CONSULTA = ROL_USUARIO === 'consulta';
+
 // Validar RUT chileno (dígito verificador)
 function validarRUT(rut) {
   if (!rut) return false;

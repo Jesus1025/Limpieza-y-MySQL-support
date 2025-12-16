@@ -76,6 +76,7 @@
 <div class="row">
     <!-- Columna Izquierda: Acciones Rápidas -->
     <div class="col-md-6">
+        {% if session.rol != 'consulta' %}
         <!-- Boleta Rápida -->
         <div class="card mb-4">
             <div class="card-header">
@@ -125,32 +126,47 @@
                 </form>
             </div>
         </div>
+        {% else %}
+        <!-- Mensaje para usuarios de consulta -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle"></i> Información
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-eye"></i> Modo consulta: Solo visualización de datos.
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Acciones Rápidas -->
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Acciones Rápidas</h5>
+                <h5 class="card-title mb-0">{% if session.rol != 'consulta' %}Acciones Rápidas{% else %}Navegación{% endif %}</h5>
             </div>
             <div class="card-body">
                 <div class="row g-2">
                     <div class="col-6">
                         <a href="{{ url_for('clientes') }}" class="btn btn-outline-primary w-100">
-                            <i class="fas fa-user-plus"></i> Nuevo Cliente
+                            <i class="fas fa-{% if session.rol != 'consulta' %}user-plus{% else %}users{% endif %}"></i> {% if session.rol != 'consulta' %}Nuevo Cliente{% else %}Ver Clientes{% endif %}
                         </a>
                     </div>
                     <div class="col-6">
                         <a href="{{ url_for('proyectos') }}" class="btn btn-outline-success w-100">
-                            <i class="fas fa-plus-circle"></i> Nuevo Proyecto
+                            <i class="fas fa-{% if session.rol != 'consulta' %}plus-circle{% else %}project-diagram{% endif %}"></i> {% if session.rol != 'consulta' %}Nuevo Proyecto{% else %}Ver Proyectos{% endif %}
                         </a>
                     </div>
                     <div class="col-6">
                         <a href="{{ url_for('facturas') }}" class="btn btn-outline-info w-100">
-                            <i class="fas fa-file-invoice-dollar"></i> Nueva Factura
+                            <i class="fas fa-file-invoice-dollar"></i> {% if session.rol != 'consulta' %}Nueva Factura{% else %}Ver Facturas{% endif %}
                         </a>
                     </div>
                     <div class="col-6">
                         <a href="{{ url_for('boletas') }}" class="btn btn-outline-warning w-100">
-                            <i class="fas fa-receipt"></i> Nueva Boleta
+                            <i class="fas fa-receipt"></i> {% if session.rol != 'consulta' %}Nueva Boleta{% else %}Ver Boletas{% endif %}
                         </a>
                     </div>
                 </div>

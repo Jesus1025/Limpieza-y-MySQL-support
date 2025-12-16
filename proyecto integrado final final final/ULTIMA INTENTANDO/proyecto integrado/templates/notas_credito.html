@@ -5,10 +5,11 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4"><i class="fas fa-file-invoice"></i> Notas de Crédito</h1>
+        <h1 class="mb-4"><i class="fas fa-file-invoice"></i> {% if session.rol == 'consulta' %}Consultar Notas de Crédito{% else %}Notas de Crédito{% endif %}</h1>
     </div>
 </div>
 
+{% if session.rol != 'consulta' %}
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -178,6 +179,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Tabla de Últimas NC -->
 <div class="row mt-4">
@@ -222,7 +224,10 @@
 <script>
 const IVA = 0.19;
 let items = [];
+const ROL_USUARIO = '{{ session.rol }}';
+const ES_CONSULTA = ROL_USUARIO === 'consulta';
 
+{% if session.rol != 'consulta' %}
 // Establecer fecha actual por defecto
 document.getElementById('fecha_emision').value = new Date().toISOString().split('T')[0];
 
@@ -412,6 +417,12 @@ document.addEventListener('DOMContentLoaded', function() {
     calcularTotales();
     cargarUltimasNC();
 });
+{% else %}
+// Usuario de solo consulta
+document.addEventListener('DOMContentLoaded', function() {
+    cargarUltimasNC();
+});
+{% endif %}
 
 // Formatear moneda
 function formatMoney(amount) {
@@ -429,6 +440,25 @@ function cargarUltimasNC() {
                 data.documentos.forEach(doc => {
                     const estadoClass = doc.estado === 'Aplicada' ? 'bg-success' : 
                                        doc.estado === 'Anulado' ? 'bg-danger' : 'bg-warning';
+                    
+                    // Solo mostrar botones si no es usuario de consulta
+                    let botonesAccion = '';
+                    if (!ES_CONSULTA) {
+                        botonesAccion = `
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-success" onclick="cambiarEstadoNC(${doc.id}, 'Aplicada')" title="Marcar Aplicada">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-outline-warning" onclick="cambiarEstadoNC(${doc.id}, 'Pendiente')" title="Marcar Pendiente">
+                                    <i class="fas fa-clock"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="cambiarEstadoNC(${doc.id}, 'Anulado')" title="Anular">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            </div>
+                        `;
+                    }
+                    
                     html += `
                         <tr>
                             <td><strong>${doc.numero_doc}</strong></td>
@@ -437,19 +467,7 @@ function cargarUltimasNC() {
                             <td><small>${doc.motivo_nc_nd || '-'}</small></td>
                             <td><strong class="text-success">${formatMoney(doc.valor_total)}</strong></td>
                             <td><span class="badge ${estadoClass}">${doc.estado}</span></td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-success" onclick="cambiarEstadoNC(${doc.id}, 'Aplicada')" title="Marcar Aplicada">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-outline-warning" onclick="cambiarEstadoNC(${doc.id}, 'Pendiente')" title="Marcar Pendiente">
-                                        <i class="fas fa-clock"></i>
-                                    </button>
-                                    <button class="btn btn-outline-danger" onclick="cambiarEstadoNC(${doc.id}, 'Anulado')" title="Anular">
-                                        <i class="fas fa-ban"></i>
-                                    </button>
-                                </div>
-                            </td>
+                            <td>${botonesAccion}</td>
                         </tr>
                     `;
                 });

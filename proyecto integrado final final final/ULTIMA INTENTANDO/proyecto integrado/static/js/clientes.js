@@ -29,6 +29,9 @@ function renderizarTabla(clientes) {
   const tbody = document.getElementById('cuerpoTablaClientes');
   if (!tbody) return;
   
+  // Verificar si el usuario es de solo consulta (variable definida en el template)
+  const esConsulta = typeof ES_CONSULTA !== 'undefined' && ES_CONSULTA;
+  
   if (clientes.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No hay clientes</td></tr>';
     return;
@@ -39,9 +42,19 @@ function renderizarTabla(clientes) {
       ? '<span class="badge bg-success">Activo</span>' 
       : '<span class="badge bg-secondary">Inactivo</span>';
     
-    const botonToggle = c.activo == 1
-      ? `<button class="btn btn-sm btn-outline-secondary" onclick="toggleEstadoCliente('${c.rut}')" title="Desactivar cliente"><i class="fas fa-toggle-on"></i></button>`
-      : `<button class="btn btn-sm btn-outline-success" onclick="toggleEstadoCliente('${c.rut}')" title="Activar cliente"><i class="fas fa-toggle-off"></i></button>`;
+    // Solo mostrar botones de acción si NO es usuario de consulta
+    let botonesAccion = `<button class="btn btn-sm btn-outline-info" onclick="verCliente('${c.rut}')" title="Ver"><i class="fas fa-eye"></i></button>`;
+    
+    if (!esConsulta) {
+      const botonToggle = c.activo == 1
+        ? `<button class="btn btn-sm btn-outline-secondary" onclick="toggleEstadoCliente('${c.rut}')" title="Desactivar cliente"><i class="fas fa-toggle-on"></i></button>`
+        : `<button class="btn btn-sm btn-outline-success" onclick="toggleEstadoCliente('${c.rut}')" title="Activar cliente"><i class="fas fa-toggle-off"></i></button>`;
+      
+      botonesAccion += `
+        <button class="btn btn-sm btn-outline-warning" onclick="editarCliente('${c.rut}')" title="Editar"><i class="fas fa-edit"></i></button>
+        ${botonToggle}
+        <button class="btn btn-sm btn-outline-danger" onclick="eliminarCliente('${c.rut}')" title="Eliminar"><i class="fas fa-trash"></i></button>`;
+    }
     
     return `<tr>
       <td>${formatearRUT(c.rut)}</td>
@@ -51,12 +64,7 @@ function renderizarTabla(clientes) {
       <td>${c.giro || '-'}</td>
       <td>${c.banco || '-'}</td>
       <td>${estado}</td>
-      <td>
-        <button class="btn btn-sm btn-outline-info" onclick="verCliente('${c.rut}')" title="Ver"><i class="fas fa-eye"></i></button>
-        <button class="btn btn-sm btn-outline-warning" onclick="editarCliente('${c.rut}')" title="Editar"><i class="fas fa-edit"></i></button>
-        ${botonToggle}
-        <button class="btn btn-sm btn-outline-danger" onclick="eliminarCliente('${c.rut}')" title="Eliminar"><i class="fas fa-trash"></i></button>
-      </td>
+      <td>${botonesAccion}</td>
     </tr>`;
   }).join('');
   
