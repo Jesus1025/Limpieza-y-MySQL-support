@@ -874,6 +874,77 @@ def exportar_clientes():
     )
 
 
+@app.route('/api/exportar-proyectos-csv')
+@login_required
+def exportar_proyectos():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT p.codigo, p.nombre, p.descripcion, c.razon_social, p.presupuesto, p.estado FROM proyectos p LEFT JOIN clientes c ON p.cliente_rut=c.rut')
+    rows = cur.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Código', 'Nombre', 'Descripción', 'Cliente', 'Presupuesto', 'Estado'])
+    for r in rows:
+        writer.writerow([r['codigo'], r['nombre'], r['descripcion'], r['razon_social'], r['presupuesto'], r['estado']])
+    
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=proyectos.csv'}
+    )
+
+
+@app.route('/api/ultimos-documentos/<tipo>')
+@login_required
+def api_ultimos_documentos(tipo):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT d.*, c.razon_social FROM documentos d
+        LEFT JOIN clientes c ON d.cliente_rut=c.rut
+        WHERE d.tipo_doc=%s ORDER BY d.id DESC LIMIT 10
+    ''', (tipo,))
+    docs = cur.fetchall()
+    conn.close()
+    return jsonify(docs)
+
+
+@app.route('/api/generar-boleta-rapida', methods=['POST'])
+@login_required
+def api_boleta_rapida():
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        data = request.get_json()
+        
+        # Obtener siguiente número
+        cur.execute("SELECT COALESCE(MAX(numero_doc),0)+1 as num FROM documentos WHERE tipo_doc='BOL'")
+        numero = cur.fetchone()['num']
+        
+        cur.execute('''
+            INSERT INTO documentos (numero_doc, tipo_doc, fecha_emision, cliente_rut, descripcion, valor_neto, iva, valor_total, estado, forma_pago)
+            VALUES (%s, 'BOL', %s, %s, %s, %s, %s, %s, 'Pendiente', 'Contado')
+        ''', (
+            numero,
+            data.get('fecha', datetime.now().strftime('%Y-%m-%d')),
+            data.get('cliente_rut'),
+            data.get('descripcion', 'Boleta rápida'),
+            data.get('valor_neto', 0),
+            data.get('iva', 0),
+            data.get('valor_total', 0)
+        ))
+        conn.commit()
+        return jsonify({'success': True, 'numero': numero})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 # ============================================================
 # MAIN
 # ============================================================
