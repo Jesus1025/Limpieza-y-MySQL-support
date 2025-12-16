@@ -402,11 +402,6 @@ function cargarUltimasFacturas() {
             if (docs.length > 0) {
                 let html = '';
                 docs.forEach(doc => {
-                    let estadoClass = 'bg-secondary';
-                    if (doc.estado === 'Pagado') estadoClass = 'bg-success';
-                    else if (doc.estado === 'Anulado') estadoClass = 'bg-danger';
-                    else if (doc.estado === 'Pendiente') estadoClass = 'bg-warning text-dark';
-                    
                     // Solo mostrar botones de acción si no es usuario de consulta
                     let botonesAccion = '';
                     if (!ES_CONSULTA) {

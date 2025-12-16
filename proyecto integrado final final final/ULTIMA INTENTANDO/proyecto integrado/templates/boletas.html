@@ -397,11 +397,6 @@ function cargarUltimasBoletas() {
             if (data && data.documentos && data.documentos.length > 0) {
                 let html = '';
                 data.documentos.forEach(doc => {
-                    let estadoClass = 'bg-secondary';
-                    if (doc.estado === 'Pagado') estadoClass = 'bg-success';
-                    else if (doc.estado === 'Anulado') estadoClass = 'bg-danger';
-                    else if (doc.estado === 'Pendiente') estadoClass = 'bg-warning';
-                    
                     // Solo mostrar botones si no es usuario de consulta
                     let botonesAccion = '';
                     if (!ES_CONSULTA) {
